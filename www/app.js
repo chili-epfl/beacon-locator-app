@@ -1,10 +1,14 @@
 $(document).ready(function() {
+	$("#record").hide();
+	$("#stop").hide();
     $("#record").click(function(){
-        $("#record").disable();
+        $("#record").hide();
+        $("#stop").show();
         startLogging();
     }); 
     $("#stop").click(function(){
-        $("#stop").disable();
+        $("#stop").hide();
+        $("#record").show();
         stopLogging();
     }); 
 });
@@ -14,12 +18,16 @@ var logging = false;
 var log0b;
 
 function initializeLogs(){
+	//$("#textexp").append("beforefile");
 	//Check that the global file object is available
     console.log(cordova.file);
     //We get the directory where things will go, see http://www.raymondcamden.com/2014/11/05/Cordova-Example-Writing-to-a-file
-	window.resolveLocalFileSystemURL(cordova.file.dataDirectory, function(dir) {
+	window.resolveLocalFileSystemURL(cordova.file.externalRootDirectory, function(dir) {
 		dataDir = dir; //We store it for later use
-		console.log("got main dir",dir);
+		//console.log("got main dir",dir);
+		//alert("got main dir "+dir.fullPath);
+		$("#record").show();
+		//$("#textexp").append("got main dir "+dir.fullPath);
 	});
 
 }
@@ -27,42 +35,51 @@ function initializeLogs(){
 function startLogging(){
 	logging = true;
 	//TODO: Create the log file with timestamp as name and empty data
-		// dataDir.getFile("log.txt", {create:true}, function(file) {
-		// 	console.log("got the file", file);
-		// 	logOb = file;
-		// 	writeLog("App started");			
-		// });
+	var filename = "locator-app-"+Date.now()+".txt";
+		dataDir.getFile(filename, {create:true}, function(file) {
+		 	//console.log("got the file", file);
+		 	//alert("got the file "+file);
+			//$("#textexp").append("got the file "+file.fullPath);
+		 	logOb = file;
+		 	writeLog("[]");			
+		});
 }
 
 function stopLogging(){
 	logging = false;
+	writeLog(JSON.stringify(logRegisters)); 
+	logRegisters = [];	
+
 	//No need to close the log file?
 }
 
 var logRegisters = [];
-
+var LOGS_PER_WRITE = 30;//Number of log entries to wait in memory before we actually write to file
 
 
 function fail(e) {
-	console.log("FileSystem Error");
+	//console.log("FileSystem Error");
+	alert("FileSystem Error");
 	console.dir(e);
 }
 
 function writeLog(str) {
 	if(!logOb){
+	 //console.log("Log file not found!");	
+	 alert("Log file not found!");	
 	 return;
-	 console.log("Log file not found!");	
 	}
-	//TODO: use the logRegisters, and convert to JSON
-	var log = str + " [" + (new Date()) + "]\n";
-	console.log("going to log "+log);
+	var log = str;
+	//console.log("going to log "+log);
+	//alert("going to log "+log);
 	logOb.createWriter(function(fileWriter) {
 		
 		fileWriter.seek(fileWriter.length);
 		
 		var blob = new Blob([log], {type:'text/plain'});
 		fileWriter.write(blob);
-		console.log("ok, in theory i worked");
+		//$("#textexp").append("ok, in theory i logged");
+		//console.log("ok, in theory i worked");
 	}, fail);
 }
 
@@ -117,6 +134,7 @@ var app = (function()
 		function onError(errorMessage)
 		{
 			console.log('Ranging beacons did fail: ' + errorMessage);
+			//alert('Ranging beacons did fail: ' + errorMessage);
 		}
 
 		// Request permission from user to access location info.
@@ -156,17 +174,30 @@ var app = (function()
 				);
 
 				$('#found-beacons').append(element);
+
+				if(logging){
+					//Add timestamp and log registers to the logging variable
+					var logEntry = {};
+					logEntry.timestamp = beacon.timeStamp;
+					logEntry.beaconID = beacon.major+"-"+beacon.minor;
+					logEntry.proximity = beacon.proximity;
+					logEntry.distance = beacon.distance;
+					logEntry.rssi = beacon.rssi;
+					logRegisters.push(logEntry);
+				}
+
+
 			}
 
-			if(logging){
-				//Add timestamp and log registers to the logging variable
-
-			}
 
 
 		});
 
 		//If 5 seconds have passed, we append the variable to the file
+		if(logRegisters.length>=LOGS_PER_WRITE){
+		 writeLog(JSON.stringify(logRegisters)); 
+		 logRegisters = [];	
+		}
 
 	}
 
