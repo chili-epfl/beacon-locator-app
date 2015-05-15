@@ -1,0 +1,187 @@
+---
+title: "Calibration for iBeacons"
+author: "Luis P."
+date: "05/15/2015"
+output: html_document
+---
+
+# The beacons
+
+We have 6 beacons in the room:
+
+```{r}
+beacons <- data.frame(beaconNr=1:6,beaconID=c("2982-17929","11667-6916","33875-41478","33198-27248","62375-26168","55326-46713"),beaconX=c(0,-2,-2,2,3,3.4),beaconY=c(0,2.7,6.4,8.9,5.8,1.8))
+```
+
+
+
+# Calibration - Walk 1
+
+This walk went over the beacons 1-6 and 1 again, for 10s in each of them, with 5 secons to move among beacons.
+
+We load the JSON data measured, and we add the real values of the walk (approximated)
+
+```{r}
+require(rjson)
+require(plyr)
+require(plotrix)
+# Load the file
+lines <- paste(readLines("run1-1431699239827.json"),collapse="")
+# Retouch it a bit so that it is proper json
+lines <- gsub("[]", "", lines, fixed=T)
+lines <- gsub("][", ",", lines, fixed=T)
+# We parse the json
+json_data <- fromJSON(lines)
+df <- ldply(json_data, data.frame)
+# We add the relative timestamp since beginning of the experiment
+mintime <- min(df$timestamp)
+df$reltime <- (df$timestamp - mintime)
+
+# We add, at each point in time, the real position, and calculate the real distance from each beacon
+realXseries = c(rep(0,times=10),
+                seq(from=0,to=-2,length.out=5),
+                rep(-2,times=10),
+                seq(from=-2,to=-2,length.out=5),
+                rep(-2,times=10),
+                seq(from=-2,to=2,length.out=5),
+                rep(2,times=10),
+                seq(from=2,to=3,length.out=5),
+                rep(3,times=10),
+                seq(from=3,to=3.4,length.out=5),
+                rep(3.4,times=10),
+                seq(from=3.4,to=0,length.out=5),
+                rep(0,times=10),
+                0
+                )
+
+realYseries = c(rep(0,times=10),
+                seq(from=0,to=2.7,length.out=5),
+                rep(2.7,times=10),
+                seq(from=2.7,to=6.4,length.out=5),
+                rep(6.4,times=10),
+                seq(from=6.4,to=8.9,length.out=5),
+                rep(8.9,times=10),
+                seq(from=8.9,to=5.8,length.out=5),
+                rep(5.8,times=10),
+                seq(from=5.8,to=1.8,length.out=5),
+                rep(1.8,times=10),
+                seq(from=1.8,to=0,length.out=5),
+                rep(0,times=10),
+                0
+                )
+
+# This transformation is not good!! do not use it!
+# df$timesec <- floor(df$reltime/1000)
+# 
+# df$realX = rep(0,nrow(df))
+# df$realY = rep(0,nrow(df))
+# for(i in 1:length(realXseries)){
+#     df[df$timesec==(i-1),"realX"] = realXseries[i]
+#     df[df$timesec==(i-1),"realY"] = realYseries[i]
+# }
+# 
+# #First attempt... non linear model trilateration, not training
+# for(i in unique(df$timesec)){
+#     plot(beacons$beaconX,beacons$beaconY,xlim=c(-10,11),ylim=c(-8,17))
+#     
+#     subset <- df[df$timesec==i,]
+#     points(subset$realX,subset$realY, pch="x", cex=2)
+#     for(beacon in beacons$beaconID){
+#     draw.circle(beacons[beacons$beaconID==beacon,"beaconX"],beacons[beacons$beaconID==beacon,"beaconY"],radius=subset[subset$beaconID==beacon,"distance"],border="blue")
+#     }
+# 
+#     # We estimate the position, see http://gis.stackexchange.com/questions/93126/trilateration-algorithm-for-n-amount-of-points-in-r
+#     subset <- df[df$timesec==i,c("beaconID","distance")]
+#     data <- merge(subset,beacons)
+#     #norm_vec <- function(x) sqrt(sum((x[1]-data$beaconX)^2+(x[2]-data$beaconY)^2))-sum(data$distance)
+#     #fit <- nlm(norm_vec,c(mean(data$beaconX),mean(data$beaconY)))
+#     #fit$code
+#     
+#     norm_vec <- function(x) sum(((sqrt((x[1]-data$beaconX)^2+(x[2]-data$beaconY)^2) - data$distance)^2)/(1+data$distance^2))
+#     fit <- nlm(norm_vec,c(mean(data$beaconX),mean(data$beaconY)))
+#     
+#     points(fit$estimate[1],fit$estimate[2], pch="o", cex=2)
+#     
+#     cat ("Press [enter] to continue")
+#     line <- readline()
+# 
+# 
+#     
+# }
+
+# Second attempt training with generalized linear model
+# We reformat our data to have more columns
+
+df$realX = rep(0,nrow(df))
+df$realY = rep(0,nrow(df))
+for(i in 1:length(realXseries)){
+    df[round(df$reltime/1000)==(i-1),"realX"] = realXseries[i]
+    df[round(df$reltime/1000)==(i-1),"realY"] = realYseries[i]
+}
+
+data <- data.frame(time=unique(df$reltime),realX=NA,realY=NA)
+for(t in data$time){
+    data[data$time==t,"realX"] <- unique(df[df$reltime==t,"realX"])
+    data[data$time==t,"realY"] <- unique(df[df$reltime==t,"realY"])
+}
+for(beacon in beacons$beaconID){
+    label = beacons[beacons$beaconID==beacon,"beaconNr"];
+    # We create the field distance
+    data[,paste("distance",label,sep="")] <- NA
+    # We go though the time values and fill in the data
+    for(t in data$time){
+        data[data$time==t,paste("distance",label,sep="")] <- df[df$reltime==t & df$beaconID==beacon,"distance"][1]
+    }
+
+    # We create the field rssi
+    data[,paste("rssi",label,sep="")] <- NA
+    # We go though the time values and fill in the data
+    for(t in data$time){
+        data[data$time==t,paste("rssi",label,sep="")] <- df[df$reltime==t & df$beaconID==beacon,"rssi"][1]
+    }
+
+    # We create the field proximity
+    data[,paste("proximity",label,sep="")] <- NA
+    # We go though the time values and fill in the data
+    for(t in data$time){
+        data[data$time==t,paste("proximity",label,sep="")] <- df[df$reltime==t & df$beaconID==beacon,"proximity"][1]
+    }
+
+}
+
+fitlm <- lm(cbind(realX,realY) ~ . - time, data=data)
+predictions <- predict(fitlm, data.frame=data[,-c("realX","realY")])
+
+#We plot the predictions
+count=0
+for(i in data$time){
+    count <- count+1
+    plot(beacons$beaconX,beacons$beaconY,xlim=c(-10,11),ylim=c(-8,17))
+    
+    subset <- df[df$reltime==i,]
+    points(subset$realX,subset$realY, pch="x", cex=2)
+    for(beacon in beacons$beaconID){
+        draw.circle(beacons[beacons$beaconID==beacon,"beaconX"],beacons[beacons$beaconID==beacon,"beaconY"],radius=subset[subset$beaconID==beacon,"distance"],border="blue")
+    }
+
+    
+    points(predictions[count,"realX"],predictions[count,"realY"], pch="o", cex=2)
+    
+    cat ("Press [enter] to continue")
+    line <- readline()
+
+
+    
+}
+
+
+
+
+# TODO: Third attempt training with n-second buffer geometric averaging
+
+
+```
+
+
+
+
