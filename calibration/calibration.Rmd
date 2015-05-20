@@ -9,7 +9,7 @@ output: html_document
 
 We have 6 beacons in the room:
 
-```{r}
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
 beacons <- data.frame(beaconNr=1:6,beaconID=c("2982-17929","11667-6916","33875-41478","33198-27248","62375-26168","55326-46713"),beaconX=c(0,-2,-2,2,3,3.4),beaconY=c(0,2.7,6.4,8.9,5.8,1.8))
 ```
 
@@ -21,10 +21,15 @@ This walk went over the beacons 1-6 and 1 again, for 10s in each of them, with 5
 
 We load the JSON data measured, and we add the real values of the walk (approximated)
 
-```{r}
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
 require(rjson)
 require(plyr)
 require(plotrix)
+require(hydroGOF)
+require(ggplot2)
+
+ROOMSIZE <- 9
+
 # Load the file
 lines <- paste(readLines("run1-1431699239827.json"),collapse="")
 # Retouch it a bit so that it is proper json
@@ -70,118 +75,393 @@ realYseries = c(rep(0,times=10),
                 0
                 )
 
-# This transformation is not good!! do not use it!
-# df$timesec <- floor(df$reltime/1000)
-# 
-# df$realX = rep(0,nrow(df))
-# df$realY = rep(0,nrow(df))
-# for(i in 1:length(realXseries)){
-#     df[df$timesec==(i-1),"realX"] = realXseries[i]
-#     df[df$timesec==(i-1),"realY"] = realYseries[i]
-# }
-# 
-# #First attempt... non linear model trilateration, not training
-# for(i in unique(df$timesec)){
-#     plot(beacons$beaconX,beacons$beaconY,xlim=c(-10,11),ylim=c(-8,17))
-#     
-#     subset <- df[df$timesec==i,]
-#     points(subset$realX,subset$realY, pch="x", cex=2)
-#     for(beacon in beacons$beaconID){
-#     draw.circle(beacons[beacons$beaconID==beacon,"beaconX"],beacons[beacons$beaconID==beacon,"beaconY"],radius=subset[subset$beaconID==beacon,"distance"],border="blue")
-#     }
-# 
-#     # We estimate the position, see http://gis.stackexchange.com/questions/93126/trilateration-algorithm-for-n-amount-of-points-in-r
-#     subset <- df[df$timesec==i,c("beaconID","distance")]
-#     data <- merge(subset,beacons)
-#     #norm_vec <- function(x) sqrt(sum((x[1]-data$beaconX)^2+(x[2]-data$beaconY)^2))-sum(data$distance)
-#     #fit <- nlm(norm_vec,c(mean(data$beaconX),mean(data$beaconY)))
-#     #fit$code
-#     
-#     norm_vec <- function(x) sum(((sqrt((x[1]-data$beaconX)^2+(x[2]-data$beaconY)^2) - data$distance)^2)/(1+data$distance^2))
-#     fit <- nlm(norm_vec,c(mean(data$beaconX),mean(data$beaconY)))
-#     
-#     points(fit$estimate[1],fit$estimate[2], pch="o", cex=2)
-#     
-#     cat ("Press [enter] to continue")
-#     line <- readline()
-# 
-# 
-#     
-# }
 
-# Second attempt training with generalized linear model
-# We reformat our data to have more columns
-
-df$realX = rep(0,nrow(df))
-df$realY = rep(0,nrow(df))
+df$realX = NA
+df$realY = NA
 for(i in 1:length(realXseries)){
     df[round(df$reltime/1000)==(i-1),"realX"] = realXseries[i]
     df[round(df$reltime/1000)==(i-1),"realY"] = realYseries[i]
 }
+summary(df)
+```
 
-data <- data.frame(time=unique(df$reltime),realX=NA,realY=NA)
-for(t in data$time){
-    data[data$time==t,"realX"] <- unique(df[df$reltime==t,"realX"])
-    data[data$time==t,"realY"] <- unique(df[df$reltime==t,"realY"])
+
+## Model 1: per-sample nonlinear trilateration (no training)
+
+
+```{r}
+
+#First attempt... non linear model trilateration, not training
+pred1 <- data.frame(time=unique(round(df$reltime/1000)),realX=NA,realY=NA,predX=NA,predY=NA)    
+for(i in unique(round(df$reltime/1000))){
+    
+    pred1[i,"realX"] <- unique(df[round(df$reltime/1000)==i,"realX"])[[1]]
+    pred1[i,"realY"] <- unique(df[round(df$reltime/1000)==i,"realY"])[[1]]
+
+## Plotting of the original data
+#   plot(beacons$beaconX,beacons$beaconY,xlim=c(-10,11),ylim=c(-8,17))   
+#    subset <- df[round(df/1000)==i,]
+#    points(subset$realX,subset$realY, pch="x", cex=2)
+#     for(beacon in beacons$beaconID){
+#         draw.circle(beacons[beacons$beaconID==beacon,"beaconX"],beacons[beacons$beaconID==beacon,"beaconY"],radius=subset[subset$beaconID==beacon,"distance"],border="blue")
+#     }
+
+    # We estimate the position, see http://gis.stackexchange.com/questions/93126/trilateration-algorithm-for-n-amount-of-points-in-r
+    subset <- df[round(df$reltime/1000)==i,c("beaconID","distance")]
+    data <- merge(subset,beacons)
+    
+    #This code does not work?
+    #norm_vec <- function(x) sqrt(sum((x[1]-data$beaconX)^2+(x[2]-data$beaconY)^2))-sum(data$distance)
+    #fit <- nlm(norm_vec,c(mean(data$beaconX),mean(data$beaconY)))
+    #fit$code
+    
+    norm_vec <- function(x) sum(((sqrt((x[1]-data$beaconX)^2+(x[2]-data$beaconY)^2) - data$distance)^2)/(1+data$distance^2))
+    fit <- nlm(norm_vec,c(mean(data$beaconX),mean(data$beaconY)))
+    
+    pred1[i,"predX"] <- fit$estimate[1]
+    pred1[i,"predY"] <- fit$estimate[2]
+    
+## Plotting the predicted points
+#   points(fit$estimate[1],fit$estimate[2], pch="o", cex=2)
+#   cat ("Press [enter] to continue")
+#   line <- readline()
+}
+
+pred1 <- pred1[complete.cases(pred1),]
+corX <- cor(pred1$realX,pred1$predX)
+print(paste("Rsquared X=",corX^2,sep=""))
+
+corY <- cor(pred1$realY,pred1$predY)
+print(paste("Rsquared Y=",corY^2,sep=""))
+
+pred1$residual <- sqrt((pred1$realX-pred1$predX)^2 + (pred1$realY-pred1$predY)^2)
+print(paste("Overall RMSE=",sqrt(var(pred1$residual, na.rm=T)),sep=""))
+
+distanceError <- sqrt((pred1$predX - pred1$realX)^2 + (pred1$predY - pred1$realY)^2)
+mean(distanceError)
+sd(distanceError)
+
+```
+
+## Model 2: generalized linear model training
+
+```{r}
+
+# Second attempt training with generalized linear model
+# We reformat our data to have more columns
+pred2 <- data.frame(time=unique(round(df$reltime/1000)),realX=NA,realY=NA)
+for(t in pred2$time){
+    pred2[pred2$time==t,"realX"] <- unique(df[round(df$reltime/1000)==t,"realX"])[[1]]
+    pred2[pred2$time==t,"realY"] <- unique(df[round(df$reltime/1000)==t,"realY"])[[1]]
 }
 for(beacon in beacons$beaconID){
     label = beacons[beacons$beaconID==beacon,"beaconNr"];
     # We create the field distance
-    data[,paste("distance",label,sep="")] <- NA
+    pred2[,paste("distance",label,sep="")] <- NA
     # We go though the time values and fill in the data
-    for(t in data$time){
-        data[data$time==t,paste("distance",label,sep="")] <- df[df$reltime==t & df$beaconID==beacon,"distance"][1]
+    for(t in pred2$time){
+        pred2[pred2$time==t,paste("distance",label,sep="")] <- df[round(df$reltime/1000)==t & df$beaconID==beacon,"distance"][1]
     }
 
     # We create the field rssi
-    data[,paste("rssi",label,sep="")] <- NA
+    pred2[,paste("rssi",label,sep="")] <- NA
     # We go though the time values and fill in the data
-    for(t in data$time){
-        data[data$time==t,paste("rssi",label,sep="")] <- df[df$reltime==t & df$beaconID==beacon,"rssi"][1]
+    for(t in pred2$time){
+        pred2[pred2$time==t,paste("rssi",label,sep="")] <- df[round(df$reltime/1000)==t & df$beaconID==beacon,"rssi"][1]
     }
 
     # We create the field proximity
-    data[,paste("proximity",label,sep="")] <- NA
+    pred2[,paste("proximity",label,sep="")] <- NA
     # We go though the time values and fill in the data
-    for(t in data$time){
-        data[data$time==t,paste("proximity",label,sep="")] <- df[df$reltime==t & df$beaconID==beacon,"proximity"][1]
+    for(t in pred2$time){
+        pred2[pred2$time==t,paste("proximity",label,sep="")] <- df[round(df$reltime/1000)==t & df$beaconID==beacon,"proximity"][1]
     }
 
 }
 
-fitlm <- lm(cbind(realX,realY) ~ . - time, data=data)
-predictions <- predict(fitlm, data.frame=data[,-c("realX","realY")])
+fitlm <- lm(cbind(realX,realY) ~ . - time, data=pred2)
+summary(fitlm)
+
+#predictions <- predict(fitlm, data.frame=pred2[,-c("realX","realY")])
+#We plot the predictions
+# count=0
+# for(i in pred2$time){
+#     count <- count+1
+#     plot(beacons$beaconX,beacons$beaconY,xlim=c(-10,11),ylim=c(-8,17))
+#     
+#     subset <- df[round(df$reltime/1000)==i,]
+#     points(subset$realX,subset$realY, pch="x", cex=2)
+#     for(beacon in beacons$beaconID){
+#         draw.circle(beacons[beacons$beaconID==beacon,"beaconX"],beacons[beacons$beaconID==beacon,"beaconY"],radius=subset[subset$beaconID==beacon,"distance"],border="blue")
+#     }
+#     points(predictions[count,"realX"],predictions[count,"realY"], pch="o", cex=2)
+#     cat ("Press [enter] to continue")
+#     line <- readline()
+# }
+
+predictions <- predict(fitlm,newdata=pred2)
+pred2$predX <- predictions[,1]
+pred2$predY <- predictions[,2]
+pred2 <- pred2[complete.cases(pred2),]
+distanceError <- sqrt((pred2$predX - pred2$realX)^2 + (pred2$predY - pred2$realY)^2)
+mean(distanceError)
+sd(distanceError)
+
+```
+
+As we see from the R-squared, the GLM training performs a bit better (in the training dataset!)
+
+## Model 3: linear model based on time-smoothing of distances to beacon only
+
+```{r}
+# TODO: Third attempt training with smoothing the distances only
+pred3 <- pred2
+
+for (i in 1:6){
+    column <- pred3[,paste("distance",i,sep="")]
+
+    #We do filtering before smoothing the signal, taking into account the size of the room (9m longer diameter)
+    column[column>ROOMSIZE]<-ROOMSIZE
+    
+    ld <- loess(column~time,pred3,span=0.15)
+    pred3[,paste("loessdistance",i,sep="")] <- predict(ld,pred3)
+#    plot(pred3$time,pred3[,paste("distance",i,sep="")], type="l")
+#    lines(pred3$time,pred3[,paste("loessdistance",i,sep="")],col=3)
+}
+
+fitloesslm <- lm(cbind(realX,realY) ~ loessdistance1+loessdistance2+loessdistance3+loessdistance4+loessdistance5+loessdistance6, data=pred3)
+summary(fitloesslm)
+
+```
+
+... and a similar variant taking into acount the interactions
+
+```{r}
+fitloesslm2 <- lm(cbind(realX,realY) ~ loessdistance1*loessdistance2*loessdistance3*loessdistance4*loessdistance5*loessdistance6, data=pred3)
+summary(fitloesslm2)
+
+```
+
+This last one performs fantastically better (on the training dataset!). Let's plot it:
+
+```{r}
+predictions <- predict(fitloesslm2, newdata=pred3)
+# #We plot the predictions
+# count=0
+# for(i in pred3$time){
+#     count <- count+1
+#     plot(beacons$beaconX,beacons$beaconY,xlim=c(-10,11),ylim=c(-8,17))
+#     
+#     subset <- df[round(df$reltime/1000)==i,]
+#     points(subset$realX,subset$realY, pch="x", cex=2)
+#     for(beacon in beacons$beaconID){
+#         draw.circle(beacons[beacons$beaconID==beacon,"beaconX"],beacons[beacons$beaconID==beacon,"beaconY"],radius=subset[subset$beaconID==beacon,"distance"],border="blue")
+#     }
+#     points(predictions[count,"realX"],predictions[count,"realY"], pch="o", cex=2)
+#     cat ("Press [enter] to continue")
+#     line <- readline()
+# }
+
+pred3$predX <- predictions[,1]
+pred3$predY <- predictions[,2]
+
+distanceError <- sqrt((pred3$predX - pred3$realX)^2 + (pred3$predY - pred3$realY)^2)
+mean(distanceError)
+sd(distanceError)
+
+```
+
+We see it is **REALLY** close to the mark at all times, within 0.5/1 meter of the real position. But... is it overfitting (to a walk around the walls)? Let's try different walks:
+
+# Test walks
+
+## A) Walk with stops through the center of the room (cross pattern)
+
+```{r,echo=FALSE}
+# Load the file
+lines <- paste(readLines("locator-app-1432125956044-testwalk1.json"),collapse="")
+# Retouch it a bit so that it is proper json
+lines <- gsub("[]", "", lines, fixed=T)
+lines <- gsub("][", ",", lines, fixed=T)
+# We parse the json
+json_data <- fromJSON(lines)
+df2 <- ldply(json_data, data.frame)
+# We add the relative timestamp since beginning of the experiment
+mintime <- min(df2$timestamp)
+df2$reltime <- (df2$timestamp - mintime)
+
+# We add, at each point in time, the real position, and calculate the real distance from each beacon
+realXseries2 = c(rep(1,times=10),
+                seq(from=1,to=1,length.out=5),
+                rep(1,times=10),
+                seq(from=1,to=-1,length.out=5),
+                rep(-1,times=10),
+                seq(from=-1,to=2,length.out=5),
+                rep(2,times=10),
+                seq(from=2,to=2,length.out=5),
+                rep(2,times=10),
+                seq(from=2,to=0,length.out=5),
+                rep(0,times=10),
+                0
+                )
+
+realYseries2 = c(rep(0,times=10),
+                seq(from=0,to=4.5,length.out=5),
+                rep(4.5,times=10),
+                seq(from=4.5,to=4.5,length.out=5),
+                rep(4.5,times=10),
+                seq(from=4.5,to=4.5,length.out=5),
+                rep(4.5,times=10),
+                seq(from=4.5,to=7,length.out=5),
+                rep(7,times=10),
+                seq(from=7,to=7,length.out=5),
+                rep(7,times=10),
+                7
+                )
+
+
+df2$realX = NA
+df2$realY = NA
+for(i in 1:length(realXseries2)){
+    df2[round(df2$reltime/1000)==(i-1),"realX"] = realXseries2[i]
+    df2[round(df2$reltime/1000)==(i-1),"realY"] = realYseries2[i]
+}
+#summary(df2)
+
+# We reformat the data for prediction according to the model to test
+topred <- data.frame(time=unique(round(df2$reltime/1000)),realX=NA,realY=NA)
+for(t in topred$time){
+    topred[topred$time==t,"realX"] <- unique(df2[round(df2$reltime/1000)==t,"realX"])[[1]]
+    topred[topred$time==t,"realY"] <- unique(df2[round(df2$reltime/1000)==t,"realY"])[[1]]
+}
+for(beacon in beacons$beaconID){
+    label = beacons[beacons$beaconID==beacon,"beaconNr"];
+    # We create the field distance
+    topred[,paste("distance",label,sep="")] <- NA
+    # We go though the time values and fill in the data
+    for(t in topred$time){
+        topred[topred$time==t,paste("distance",label,sep="")] <- df2[round(df2$reltime/1000)==t & df2$beaconID==beacon,"distance"][1]
+    }
+
+    # We create the field rssi
+    topred[,paste("rssi",label,sep="")] <- NA
+    # We go though the time values and fill in the data
+    for(t in topred$time){
+        topred[topred$time==t,paste("rssi",label,sep="")] <- df2[round(df2$reltime/1000)==t & df2$beaconID==beacon,"rssi"][1]
+    }
+
+    # We create the field proximity
+    topred[,paste("proximity",label,sep="")] <- NA
+    # We go though the time values and fill in the data
+    for(t in topred$time){
+        topred[topred$time==t,paste("proximity",label,sep="")] <- df2[round(df2$reltime/1000)==t & df2$beaconID==beacon,"proximity"][1]
+    }
+
+}
+
+for (i in 1:6){
+    column <- topred[,paste("distance",i,sep="")]
+    
+    #We do filtering before smoothing the signal, taking into account the size of the room (9m longer diameter)
+    column[column>ROOMSIZE]<-ROOMSIZE
+
+    ld <- loess(column~time,topred,span=0.15)
+    topred[,paste("loessdistance",i,sep="")] <- predict(ld,topred)
+#     plot(topred$time,topred[,paste("distance",i,sep="")], type="l")
+#     lines(topred$time,topred[,paste("loessdistance",i,sep="")],col=3)
+#     cat ("Press [enter] to continue")
+#     line <- readline()
+}
+
+
+
+predictionstest1 <- predict(fitloesslm2, newdata=topred)
 
 #We plot the predictions
-count=0
-for(i in data$time){
-    count <- count+1
-    plot(beacons$beaconX,beacons$beaconY,xlim=c(-10,11),ylim=c(-8,17))
-    
-    subset <- df[df$reltime==i,]
-    points(subset$realX,subset$realY, pch="x", cex=2)
-    for(beacon in beacons$beaconID){
-        draw.circle(beacons[beacons$beaconID==beacon,"beaconX"],beacons[beacons$beaconID==beacon,"beaconY"],radius=subset[subset$beaconID==beacon,"distance"],border="blue")
-    }
+# count=0
+# for(i in topred$time){
+#     count <- count+1
+#     plot(beacons$beaconX,beacons$beaconY,xlim=c(-10,11),ylim=c(-8,17))
+#     
+#     subset <- df2[round(df2$reltime/1000)==i,]
+#     points(subset$realX,subset$realY, pch="x", cex=2)
+#     for(beacon in beacons$beaconID){
+#         draw.circle(beacons[beacons$beaconID==beacon,"beaconX"],beacons[beacons$beaconID==beacon,"beaconY"],radius=subset[subset$beaconID==beacon,"distance"],border="blue")
+#     }
+#     points(predictionstest1[count,"realX"],predictionstest1[count,"realY"], pch="o", cex=2)
+#     cat ("Press [enter] to continue")
+#     line <- readline()
+# }
 
-    
-    points(predictions[count,"realX"],predictions[count,"realY"], pch="o", cex=2)
-    
-    cat ("Press [enter] to continue")
-    line <- readline()
+topred$predX <- predictionstest1[,1]
+topred$predY <- predictionstest1[,2]
+
+distanceError <- sqrt((topred$predX - topred$realX)^2 + (topred$predY - topred$realY)^2)
+mean(distanceError)
+sd(distanceError)
+
+```
+
+The error is awful! Let's re-train the same model now with both of the walks, and will test them with a different one:
+
+```{r}
+pred3$walk <- 1
+topred$walk <- 2
+newtraindata <- rbind(pred3,topred)
+newfitloess <- lm(cbind(realX,realY) ~ loessdistance1*loessdistance2*loessdistance3*loessdistance4*loessdistance5*loessdistance6, data=newtraindata)
+summary(newfitloess)
+
+predictions <- predict(newfitloess, newdata=newtraindata)
+
+#We plot the predictions
+# count=0
+# for(i in pred3$time){
+#     count <- count+1
+#     plot(beacons$beaconX,beacons$beaconY,xlim=c(-10,11),ylim=c(-8,17))
+#     
+#     subset <- df[round(df$reltime/1000)==i,]
+#     points(subset$realX,subset$realY, pch="x", cex=2)
+#     for(beacon in beacons$beaconID){
+#         draw.circle(beacons[beacons$beaconID==beacon,"beaconX"],beacons[beacons$beaconID==beacon,"beaconY"],radius=subset[subset$beaconID==beacon,"distance"],border="blue")
+#     }
+#     points(predictions[count,"realX"],predictions[count,"realY"], pch="o", cex=2)
+#     cat ("Press [enter] to continue")
+#     line <- readline()
+# }
+# for(i in topred$time){
+#     count <- count+1
+#     plot(beacons$beaconX,beacons$beaconY,xlim=c(-10,11),ylim=c(-8,17))
+#     
+#     subset <- df2[round(df2$reltime/1000)==i,]
+#     points(subset$realX,subset$realY, pch="x", cex=2)
+#     for(beacon in beacons$beaconID){
+#         draw.circle(beacons[beacons$beaconID==beacon,"beaconX"],beacons[beacons$beaconID==beacon,"beaconY"],radius=subset[subset$beaconID==beacon,"distance"],border="blue")
+#     }
+#     points(predictions[count,"realX"],predictions[count,"realY"], pch="o", cex=2)
+#     cat ("Press [enter] to continue")
+#     line <- readline()
+# }
+
+# Scatterplot comparison of prediction and real
+ggplot(data.frame(predictions)[1:97,], aes(x = realX, y = realY)) + geom_point(alpha=0.2,col="blue",size=5) + geom_point(data=pred3,alpha=0.5,col="black",size=5)
+ggplot(data.frame(predictions)[98:180,], aes(x = realX, y = realY)) + geom_point(alpha=0.2,col="blue",size=5) + geom_point(data=topred,alpha=0.5,col="black",size=5)
 
 
-    
-}
+newtraindata$predX <- predictions[,1]
+newtraindata$predY <- predictions[,2]
 
+distanceError <- sqrt((newtraindata$predX - newtraindata$realX)^2 + (newtraindata$predY - newtraindata$realY)^2)
+mean(distanceError)
+sd(distanceError)
 
+# TODO: plot realX and predX over time
+ggplot(newtraindata,aes(x=time,y=realX,color=as.factor(walk)))+geom_line()
 
-
-# TODO: Third attempt training with n-second buffer geometric averaging
-
+# TODO: What if we re-smooth the predicted values?
 
 ```
 
 
+## B) Continuous walk (slowish) around the room, but not the walls, changing directions
 
-
+TODO: Remove outliers, distance>9m before doing loess? either make =9 or interpolate adjacent (or both)
