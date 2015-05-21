@@ -141,6 +141,9 @@ distanceError <- sqrt((pred1$predX - pred1$realX)^2 + (pred1$predY - pred1$realY
 mean(distanceError)
 sd(distanceError)
 
+error <- as.data.frame(distanceError)
+ggplot(error, aes(x=distanceError)) + geom_density(alpha=.2, fill="#FF6666")
+
 ```
 
 ## Model 2: generalized linear model training
@@ -453,15 +456,41 @@ newtraindata$predY <- predictions[,2]
 distanceError <- sqrt((newtraindata$predX - newtraindata$realX)^2 + (newtraindata$predY - newtraindata$realY)^2)
 mean(distanceError)
 sd(distanceError)
+error <- as.data.frame(distanceError)
+ggplot(error, aes(x=distanceError)) + geom_density(alpha=.2, fill="#FF6666")
 
-# TODO: plot realX and predX over time
-ggplot(newtraindata,aes(x=time,y=realX,color=as.factor(walk)))+geom_line()
+# plot realX and predX over time
+ggplot(newtraindata,aes(x=time,y=realX,color=as.factor(walk)))+geom_line()+geom_line(aes(x=time,y=predX,color=as.factor(walk),size=0.5))
 
-# TODO: What if we re-smooth the predicted values?
+# What if we re-smooth the predicted values?
+# Split the data into walks before doing the smoothing!
+finaldata <- data.frame()
+for(i in unique(newtraindata$walk)){
+    data <- newtraindata[newtraindata$walk==i,]
+    loessX <- loess(predX~time,data,span=0.2)#After several tries, this seems to be the best smoothing value!
+    loessY <- loess(predY~time,data,span=0.2)
+    data$predX2 <- predict(loessX,newdata=data)
+    data$predY2 <- predict(loessY,newdata=data)
+    finaldata <- rbind(finaldata,data)
+}
 
+# We plot the new predicted values again
+ggplot(finaldata,aes(x=time,y=realX,color=as.factor(walk)))+geom_line()+geom_line(aes(x=time,y=predX2,color=as.factor(walk),size=0.3))
+ggplot(finaldata,aes(x=time,y=realY,color=as.factor(walk)))+geom_line()+geom_line(aes(x=time,y=predY2,color=as.factor(walk),size=0.3))
+#    line <- readline()
+#    cat ("Press [enter] to continue")
+
+distanceError <- sqrt((finaldata$predX2 - finaldata$realX)^2 + (finaldata$predY2 - finaldata$realY)^2)
+mean(distanceError)
+sd(distanceError)
+# We plot the density distribution of error
+error <- as.data.frame(distanceError)
+ggplot(error, aes(x=distanceError)) + geom_density(alpha=.2, fill="#FF6666")
 ```
+
+TODO: try out the trilateration one with smoothing
 
 
 ## B) Continuous walk (slowish) around the room, but not the walls, changing directions
 
-TODO: Remove outliers, distance>9m before doing loess? either make =9 or interpolate adjacent (or both)
+TODO: We now re-test with a more difficult walk, with less pauses
