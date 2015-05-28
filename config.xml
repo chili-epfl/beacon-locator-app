@@ -1,0 +1,13 @@
+<?xml version='1.0' encoding='utf-8'?>
+<widget id="com.evothings.demoapp" version="0.0.1" xmlns="http://www.w3.org/ns/widgets" xmlns:cdv="http://cordova.apache.org/ns/1.0">
+    <name>Teacher tracker</name>
+    <description>
+        A simple Apache Cordova application that tracks beacon position and accelerometer.
+    </description>
+    <author email="luis.prieto@epfl.ch" href="http://chili.epfl.ch/">
+        CHILI Lab, EPFL
+    </author>
+    <!--content src="http://128.178.116.204:4042" /-->
+	<content src="index.html" />
+    <access origin="*" />
+</widget>

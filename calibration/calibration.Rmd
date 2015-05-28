@@ -276,6 +276,169 @@ sd(distanceError)
 
 We see it is **REALLY** close to the mark at all times, within 0.5/1 meter of the real position. But... is it overfitting (to a walk around the walls)? Let's try different walks:
 
+## Model 4: per-sample nonlinear trilateration with smoothing
+
+
+```{r}
+
+#First attempt... non linear model trilateration, not training
+pred4 <- data.frame(time=unique(round(df$reltime/1000)),realX=NA,realY=NA,predX=NA,predY=NA)    
+for(i in unique(round(df$reltime/1000))){
+    
+    pred4[i,"realX"] <- unique(df[round(df$reltime/1000)==i,"realX"])[[1]]
+    pred4[i,"realY"] <- unique(df[round(df$reltime/1000)==i,"realY"])[[1]]
+
+## Plotting of the original data
+#   plot(beacons$beaconX,beacons$beaconY,xlim=c(-10,11),ylim=c(-8,17))   
+#    subset <- df[round(df/1000)==i,]
+#    points(subset$realX,subset$realY, pch="x", cex=2)
+#     for(beacon in beacons$beaconID){
+#         draw.circle(beacons[beacons$beaconID==beacon,"beaconX"],beacons[beacons$beaconID==beacon,"beaconY"],radius=subset[subset$beaconID==beacon,"distance"],border="blue")
+#     }
+
+    # We estimate the position, see http://gis.stackexchange.com/questions/93126/trilateration-algorithm-for-n-amount-of-points-in-r
+    subset <- df[round(df$reltime/1000)==i,c("beaconID","distance")]
+    data <- merge(subset,beacons)
+    
+    #This code does not work?
+    #norm_vec <- function(x) sqrt(sum((x[1]-data$beaconX)^2+(x[2]-data$beaconY)^2))-sum(data$distance)
+    #fit <- nlm(norm_vec,c(mean(data$beaconX),mean(data$beaconY)))
+    #fit$code
+    
+    norm_vec <- function(x) sum(((sqrt((x[1]-data$beaconX)^2+(x[2]-data$beaconY)^2) - data$distance)^2)/(1+data$distance^2))
+    fit <- nlm(norm_vec,c(mean(data$beaconX),mean(data$beaconY)))
+    
+    pred4[i,"predX"] <- fit$estimate[1]
+    pred4[i,"predY"] <- fit$estimate[2]
+    
+## Plotting the predicted points
+#   points(fit$estimate[1],fit$estimate[2], pch="o", cex=2)
+#   cat ("Press [enter] to continue")
+#   line <- readline()
+}
+
+pred4 <- pred4[complete.cases(pred4),]
+
+smoothfitX <- loess(predX~time,pred4,span=0.15)
+smoothfitY <- loess(predY~time,pred4,span=0.15)
+pred4$smpredX <- predict(smoothfitX,pred4)
+pred4$smpredY <- predict(smoothfitY,pred4)
+
+ggplot(pred4, aes(x = time, y = realX)) + geom_line(col="blue",size=1) + geom_line(data=pred4, aes(x=time,y=predX),col="black",size=1) + geom_line(data=pred4, aes(x=time,y=smpredX),col="red",size=1)
+
+ggplot(pred4, aes(x = time, y = realY)) + geom_line(col="blue",size=1) + geom_line(data=pred4, aes(x=time,y=predY),col="black",size=1) + geom_line(data=pred4, aes(x=time,y=smpredY),col="red",size=1)
+
+
+corX <- cor(pred4$realX,pred4$predX)
+print(paste("Rsquared X=",corX^2,sep=""))
+
+corY <- cor(pred4$realY,pred4$predY)
+print(paste("Rsquared Y=",corY^2,sep=""))
+
+pred4$residual <- sqrt((pred4$realX-pred4$predX)^2 + (pred4$realY-pred4$predY)^2)
+print(paste("Overall RMSE=",sqrt(var(pred4$residual, na.rm=T)),sep=""))
+
+distanceError <- sqrt((pred4$predX - pred4$realX)^2 + (pred4$predY - pred4$realY)^2)
+mean(distanceError)
+sd(distanceError)
+
+error <- as.data.frame(distanceError)
+ggplot(error, aes(x=distanceError)) + geom_density(alpha=.2, fill="#FF6666")
+
+```
+
+
+## Model 5: per-sample nonlinear trilateration with smoothing BEFORE
+
+
+```{r}
+####### REVIEW!!!!!!!!!!!!!
+
+# We smooth the initial distance signal for each beacon
+dfsmooth <- data.frame()
+for(i in beacons$beaconID){
+    
+    subset <- df[df$beaconID==i,]
+    
+    #p <- ggplot(subset, aes(x=reltime,y=distance))+geom_line(col="blue",size=1)
+    
+    smoothfit <- loess(distance~reltime,subset,span=0.15)
+    subset$newdistance <- predict(smoothfit,subset)
+    
+    #print(p + geom_line(data=subset, aes(x=reltime,y=newdistance), col="red",size=1))
+    
+    #print("more?")
+    #line <- readline()
+    if(nrow(dfsmooth)==0) dfsmooth <- subset
+    else dfsmooth <- rbind(dfsmooth,subset)
+}
+
+
+#First attempt... non linear model trilateration, not training
+pred4 <- data.frame(time=unique(round(dfsmooth$reltime/1000)),realX=NA,realY=NA,predX=NA,predY=NA)    
+for(i in unique(round(dfsmooth$reltime/1000))){
+    
+    pred4[i,"realX"] <- unique(dfsmooth[round(dfsmooth$reltime/1000)==i,"realX"])[[1]]
+    pred4[i,"realY"] <- unique(dfsmooth[round(dfsmooth$reltime/1000)==i,"realY"])[[1]]
+
+## Plotting of the original data
+#   plot(beacons$beaconX,beacons$beaconY,xlim=c(-10,11),ylim=c(-8,17))   
+#    subset <- df[round(df/1000)==i,]
+#    points(subset$realX,subset$realY, pch="x", cex=2)
+#     for(beacon in beacons$beaconID){
+#         draw.circle(beacons[beacons$beaconID==beacon,"beaconX"],beacons[beacons$beaconID==beacon,"beaconY"],radius=subset[subset$beaconID==beacon,"distance"],border="blue")
+#     }
+
+    # We estimate the position, see http://gis.stackexchange.com/questions/93126/trilateration-algorithm-for-n-amount-of-points-in-r
+    subset <- dfsmooth[round(dfsmooth$reltime/1000)==i,c("beaconID","distance")]
+    data <- merge(subset,beacons)
+    
+    #This code does not work?
+    #norm_vec <- function(x) sqrt(sum((x[1]-data$beaconX)^2+(x[2]-data$beaconY)^2))-sum(data$distance)
+    #fit <- nlm(norm_vec,c(mean(data$beaconX),mean(data$beaconY)))
+    #fit$code
+    
+    norm_vec <- function(x) sum(((sqrt((x[1]-data$beaconX)^2+(x[2]-data$beaconY)^2) - data$distance)^2)/(1+data$newdistance^2))
+    fit <- nlm(norm_vec,c(mean(data$beaconX),mean(data$beaconY)))
+    
+    pred4[i,"predX"] <- fit$estimate[1]
+    pred4[i,"predY"] <- fit$estimate[2]
+    
+## Plotting the predicted points
+#   points(fit$estimate[1],fit$estimate[2], pch="o", cex=2)
+#   cat ("Press [enter] to continue")
+#   line <- readline()
+}
+
+pred4 <- pred4[complete.cases(pred4),]
+
+
+ggplot(pred4, aes(x = time, y = realX)) + geom_line(col="blue",size=1) + geom_line(data=pred4, aes(x=time,y=predX),col="black",size=1)
+
+ggplot(pred4, aes(x = time, y = realY)) + geom_line(col="blue",size=1) + geom_line(data=pred4, aes(x=time,y=predY),col="black",size=1)
+
+
+corX <- cor(pred4$realX,pred4$predX)
+print(paste("Rsquared X=",corX^2,sep=""))
+
+corY <- cor(pred4$realY,pred4$predY)
+print(paste("Rsquared Y=",corY^2,sep=""))
+
+pred4$residual <- sqrt((pred4$realX-pred4$predX)^2 + (pred4$realY-pred4$predY)^2)
+print(paste("Overall RMSE=",sqrt(var(pred4$residual, na.rm=T)),sep=""))
+
+distanceError <- sqrt((pred4$predX - pred4$realX)^2 + (pred4$predY - pred4$realY)^2)
+mean(distanceError)
+sd(distanceError)
+
+error <- as.data.frame(distanceError)
+ggplot(error, aes(x=distanceError)) + geom_density(alpha=.2, fill="#FF6666")
+
+```
+
+
+
+
 # Test walks
 
 ## A) Walk with stops through the center of the room (cross pattern)
@@ -488,7 +651,7 @@ error <- as.data.frame(distanceError)
 ggplot(error, aes(x=distanceError)) + geom_density(alpha=.2, fill="#FF6666")
 ```
 
-TODO: try out the trilateration one with smoothing
+
 
 
 ## B) Continuous walk (slowish) around the room, but not the walls, changing directions

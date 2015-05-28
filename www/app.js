@@ -15,7 +15,8 @@ $(document).ready(function() {
 
 var dataDir;
 var logging = false;
-var log0b;
+var logOb;//object for beacons log
+var logOb2;//object for accel log
 
 function initializeLogs(){
 	//$("#textexp").append("beforefile");
@@ -43,6 +44,15 @@ function startLogging(){
 		 	logOb = file;
 		 	writeLog("[]");			
 		});
+	//We do the same for the accelerometer data
+	var filename2 = "accelerometer-app-"+Date.now()+".txt";
+		dataDir.getFile(filename2, {create:true}, function(file) {
+		 	//console.log("got the file", file);
+		 	//alert("got the file "+file);
+			//$("#textexp").append("got the file "+file.fullPath);
+		 	logOb2 = file;
+		 	writeLog2("[]");			
+		});
 }
 
 function stopLogging(){
@@ -50,11 +60,14 @@ function stopLogging(){
 	writeLog(JSON.stringify(logRegisters)); 
 	logRegisters = [];	
 
-	//No need to close the log file?
+	writeLog2(JSON.stringify(logRegisters2)); 
+	logRegisters2 = [];	
 }
 
 var logRegisters = [];
-var LOGS_PER_WRITE = 30;//Number of log entries to wait in memory before we actually write to file
+var logRegisters2 = [];
+var LOGS_PER_WRITE = 30;//Number of log entries to wait in memory before we actually write to file beacons (1/sec)
+var LOGS_PER_WRITE2 = 200;//Number of log entries to wait in memory before we actually write to file accelerometer (20/sec)
 
 
 function fail(e) {
@@ -66,7 +79,7 @@ function fail(e) {
 function writeLog(str) {
 	if(!logOb){
 	 //console.log("Log file not found!");	
-	 alert("Log file not found!");	
+	 alert("Beacon Log file not found!");	
 	 return;
 	}
 	var log = str;
@@ -83,6 +96,25 @@ function writeLog(str) {
 	}, fail);
 }
 
+function writeLog2(str) {
+	if(!logOb2){
+	 //console.log("Log file not found!");	
+	 alert("Accel Log file not found!");	
+	 return;
+	}
+	var log = str;
+	//console.log("going to log "+log);
+	//alert("going to log "+log);
+	logOb2.createWriter(function(fileWriter) {
+		
+		fileWriter.seek(fileWriter.length);
+		
+		var blob = new Blob([log], {type:'text/plain'});
+		fileWriter.write(blob);
+		//$("#textexp").append("ok, in theory i logged");
+		//console.log("ok, in theory i worked");
+	}, fail);
+}
 
 
 var app = (function()
@@ -101,6 +133,22 @@ var app = (function()
 		document.addEventListener('deviceready', onDeviceReady, false);
 	};
 
+	function initialiseAccelerometer()
+	{
+		function onSuccess(acceleration)
+		{
+			accelerometerHandler(acceleration.x, acceleration.y, acceleration.z, acceleration.timestamp)
+		}
+		function onError(error)
+		{
+			console.log('Accelerometer error: ' + error)
+		}
+		navigator.accelerometer.watchAcceleration(
+			onSuccess,
+			onError,
+			{ frequency: 50 })
+	}
+
 	function onDeviceReady()
 	{
 		// Start tracking beacons!
@@ -108,8 +156,45 @@ var app = (function()
 
 		initializeLogs();
 
+		initialiseAccelerometer();
+
 		// Display refresh timer.
 		updateTimer = setInterval(displayBeaconList, 1000);
+	}
+
+	function accelerometerHandler(accelerationX, accelerationY, accelerationZ, timestamp)
+	{
+
+				$('#found-accelerometer').empty();
+
+
+				// Create tag to display beacon data.
+				var element = $(
+					'<li>'
+					+	'X: ' + accelerationX + '<br />'
+					+	'Y: ' + accelerationY + '<br />'
+					+	'Z: ' + accelerationZ + '<br />'
+					+ '</li>'
+				);
+
+				$('#found-accelerometer').append(element);
+
+				if(logging){
+					//Add timestamp and log registers to the logging variable
+					var logEntry = {};
+					logEntry.accelerationX = accelerationX;
+					logEntry.accelerationY = accelerationY;
+					logEntry.accelerationZ = accelerationZ;
+					logEntry.timestamp = timestamp
+					logRegisters2.push(logEntry);
+				}
+
+		//If 5 seconds have passed, we append the variable to the file
+		if(logRegisters2.length>=LOGS_PER_WRITE2){
+		 writeLog(JSON.stringify(logRegisters2)); 
+		 logRegisters2 = [];	
+		}
+
 	}
 
 	function startScan()
