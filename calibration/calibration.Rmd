@@ -76,15 +76,339 @@ realYseries = c(rep(0,times=10),
                 )
 
 
-df$realX = NA
-df$realY = NA
 for(i in 1:length(realXseries)){
     df[round(df$reltime/1000)==(i-1),"realX"] = realXseries[i]
     df[round(df$reltime/1000)==(i-1),"realY"] = realYseries[i]
 }
-summary(df)
+
+for (i in 1:nrow(df)){
+    df[i,"beaconX"] <- beacons[beacons$beaconID == df[i,"beaconID"],"beaconX"]
+    df[i,"beaconY"] <- beacons[beacons$beaconID == df[i,"beaconID"],"beaconY"]
+    df[i,"realDist"] <- sqrt((df[i,"realX"]-df[i,"beaconX"])^2 + (df[i,"realY"]-df[i,"beaconY"])^2)
+}
+
+#head(df)
 ```
 
+# NEW ATTEMPTS
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+library(forecast)
+library(caret)
+
+beaconFits <- list()
+
+# We calculate an improved distance for each beacon
+for(i in 1:nrow(beacons)){
+    beacon1 <- df[df$beaconID == beacons[i,"beaconID"],]
+    beacon1[beacon1$distance > ROOMSIZE, "capdistance"] <- ROOMSIZE
+    beacon1[beacon1$distance <= ROOMSIZE, "capdistance"] <- beacon1[beacon1$distance <= ROOMSIZE, "distance"]
+    beacon1$madistance <- ma(ts(beacon1$capdistance),order=5)
+    beacon1$maproximity <- round(ma(ts(beacon1$proximity),order=3))
+    beacon1$marssi <- ma(ts(beacon1$rssi),order=5)
+#    fit <- lm(realDist ~ madistance+capdistance+proximity, data=beacon1)
+#    fit2 <- lm(realDist ~ madistance+maproximity, data=beacon1)
+    #This one seems to give a bit better results
+    fit3 <- lm(realDist ~ madistance+maproximity+marssi, data=beacon1)
+    #summary(fit)
+    #mean(abs(fit$residuals))
+    #mean(abs(fit2$residuals))
+    print(mean(abs(fit3$residuals)))
+    fit4 <- train(realDist ~ madistance+maproximity+marssi, data=beacon1, method="gam")
+    print(mean(abs(fit4$finalModel$residuals)))
+    plot(beacon1$reltime,beacon1$distance,type="l")
+    lines(beacon1$reltime,beacon1$realDist,col="red")
+    #lines(beacon1$reltime,predict(fit,newdata = beacon1),col="blue")
+    #lines(beacon1$reltime,predict(fit2,newdata = beacon1),col="green")
+    lines(beacon1$reltime,predict(fit3,newdata = beacon1),col="orange")
+    lines(beacon1$reltime,predict(fit4$finalModel,newdata = beacon1),col="green")
+
+    df[df$beaconID == beacons[i,"beaconID"],"fittedDistLM"] <- ifelse(predict(fit3,newdata = beacon1)>0, predict(fit3,newdata = beacon1), 0) 
+    df[df$beaconID == beacons[i,"beaconID"],"fittedDistGAM"] <- ifelse(predict(fit4$finalModel,newdata = beacon1)>0, predict(fit4$finalModel,newdata = beacon1), 0) 
+    name <- as.character(beacons[i,"beaconID"])
+    beaconFits[[name]] <- fit4$finalModel
+}
+
+head(df)
+
+```
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+# We try trilateration with the modified distance values
+
+pred1 <- data.frame(time=unique(round(df$reltime/1000)),realX=NA,realY=NA,predXLM=NA,predYLM=NA,predXGAM=NA,predYGAM=NA)    
+for(i in unique(round(df$reltime/1000))){
+    
+    pred1[i,"realX"] <- unique(df[round(df$reltime/1000)==i,"realX"])[[1]]
+    pred1[i,"realY"] <- unique(df[round(df$reltime/1000)==i,"realY"])[[1]]
+
+## Plotting of the original data
+#   plot(beacons$beaconX,beacons$beaconY,xlim=c(-10,11),ylim=c(-8,17))   
+#    subset <- df[round(df$reltime/1000)==i,]
+#    points(subset$realX,subset$realY, pch="x", cex=2)
+#     for(beacon in beacons$beaconID){
+#         draw.circle(beacons[beacons$beaconID==beacon,"beaconX"],beacons[beacons$beaconID==beacon,"beaconY"],radius=subset[subset$beaconID==beacon,"fittedDistLM"],border="blue")
+#         draw.circle(beacons[beacons$beaconID==beacon,"beaconX"],beacons[beacons$beaconID==beacon,"beaconY"],radius=subset[subset$beaconID==beacon,"fittedDistGAM"],border="green")
+#     }
+
+    # We estimate the position, see http://gis.stackexchange.com/questions/93126/trilateration-algorithm-for-n-amount-of-points-in-r
+    subset <- df[round(df$reltime/1000)==i,c("beaconID","fittedDistLM","fittedDistGAM")]
+    data <- merge(subset,beacons)
+    
+    #This code does not work?
+    #norm_vec <- function(x) sqrt(sum((x[1]-data$beaconX)^2+(x[2]-data$beaconY)^2))-sum(data$distance)
+    #fit <- nlm(norm_vec,c(mean(data$beaconX),mean(data$beaconY)))
+    #fit$code
+    
+    norm_vec <- function(x) sum(((sqrt((x[1]-data$beaconX)^2+(x[2]-data$beaconY)^2) - data$fittedDistLM)^2)/(1+data$fittedDistLM^2))
+    fit <- nlm(norm_vec,c(mean(data$beaconX),mean(data$beaconY)))
+
+    norm_vec2 <- function(x) sum(((sqrt((x[1]-data$beaconX)^2+(x[2]-data$beaconY)^2) - data$fittedDistGAM)^2)/(1+data$fittedDistGAM^2))
+    fit2 <- nlm(norm_vec2,c(mean(data$beaconX),mean(data$beaconY)))
+
+        
+    pred1[i,"predXLM"] <- fit$estimate[1]
+    pred1[i,"predYLM"] <- fit$estimate[2]
+    pred1[i,"predXGAM"] <- fit2$estimate[1]
+    pred1[i,"predYGAM"] <- fit2$estimate[2]
+    
+## Plotting the predicted points
+#    points(fit$estimate[1],fit$estimate[2], pch="o", cex=2, col="blue")
+#    points(fit2$estimate[1],fit2$estimate[2], pch="o", cex=2, col="green")
+#    cat ("Press [enter] to continue")
+#    line <- readline()
+}
+pred1$predXGAMsmooth <- ma(pred1$predXGAM, order=5)
+pred1$predYGAMsmooth <- ma(pred1$predYGAM, order=5)
+
+pred1 <- pred1[complete.cases(pred1),]
+# corX <- cor(pred1$realX,pred1$predX)
+# print(paste("Rsquared X=",corX^2,sep=""))
+# 
+# corY <- cor(pred1$realY,pred1$predY)
+# print(paste("Rsquared Y=",corY^2,sep=""))
+# 
+# pred1$residual <- sqrt((pred1$realX-pred1$predX)^2 + (pred1$realY-pred1$predY)^2)
+# print(paste("Overall RMSE=",sqrt(var(pred1$residual, na.rm=T)),sep=""))
+
+# distanceError <- sqrt((pred1$predX - pred1$realX)^2 + (pred1$predY - pred1$realY)^2)
+# mean(distanceError)
+# sd(distanceError)
+# distanceErrorLM <- sqrt((pred1$predXLM - pred1$realX)^2 + (pred1$predYLM - pred1$realY)^2)
+# mean(distanceErrorLM)
+# sd(distanceErrorLM)
+distanceErrorGAM <- sqrt((pred1$predXGAM - pred1$realX)^2 + (pred1$predYGAM - pred1$realY)^2)
+mean(distanceErrorGAM)
+sd(distanceErrorGAM)
+
+distanceErrorGAM2 <- sqrt((pred1$predXGAMsmooth - pred1$realX)^2 + (pred1$predYGAMsmooth - pred1$realY)^2)
+mean(distanceErrorGAM2)
+sd(distanceErrorGAM2)
+
+
+#error <- as.data.frame(distanceError)
+#ggplot(error, aes(x=distanceError)) + geom_density(alpha=.2, fill="#FF6666")
+plot(pred1$time,pred1$realX,type="l",ylim=c(-5,12))
+#lines(pred1$time,pred1$predXLM,col="orange")
+lines(pred1$time,pred1$predXGAM,col="green")
+lines(pred1$time,pred1$predXGAMsmooth,col="blue")
+lines(pred1$time,pred1$realY,lty=2)
+#lines(pred1$time,pred1$predXLM,col="orange")
+lines(pred1$time,pred1$predYGAM,lty=2,col="green")
+lines(pred1$time,pred1$predYGAMsmooth,lty=2,col="blue")
+
+# Plot of the real and predicted space distribution
+ggplot(pred1, aes(x = realX, y = realY)) + 
+    geom_point(size=5) + 
+    geom_point(data=pred1, mapping=aes(x=predXGAM, y=predYGAM, shape="b"),alpha=0.2,col="green",size=5) +
+    geom_point(data=pred1, mapping=aes(x=predXGAMsmooth, y=predYGAMsmooth, shape="c"),alpha=0.2,col="blue",size=5)
+
+
+
+# TODO: try weighted trilateration?
+
+
+```
+
+## Test walk (cross pattern)
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+# Load the file
+lines <- paste(readLines("locator-app-1432125956044-testwalk1.json"),collapse="")
+# Retouch it a bit so that it is proper json
+lines <- gsub("[]", "", lines, fixed=T)
+lines <- gsub("][", ",", lines, fixed=T)
+# We parse the json
+json_data <- fromJSON(lines)
+df2 <- ldply(json_data, data.frame)
+# We add the relative timestamp since beginning of the experiment
+mintime <- min(df2$timestamp)
+df2$reltime <- (df2$timestamp - mintime)
+
+# We add, at each point in time, the real position, and calculate the real distance from each beacon
+realXseries2 = c(rep(1,times=10),
+                seq(from=1,to=1,length.out=5),
+                rep(1,times=10),
+                seq(from=1,to=-1,length.out=5),
+                rep(-1,times=10),
+                seq(from=-1,to=2,length.out=5),
+                rep(2,times=10),
+                seq(from=2,to=2,length.out=5),
+                rep(2,times=10),
+                seq(from=2,to=0,length.out=5),
+                rep(0,times=10),
+                0
+                )
+
+realYseries2 = c(rep(0,times=10),
+                seq(from=0,to=4.5,length.out=5),
+                rep(4.5,times=10),
+                seq(from=4.5,to=4.5,length.out=5),
+                rep(4.5,times=10),
+                seq(from=4.5,to=4.5,length.out=5),
+                rep(4.5,times=10),
+                seq(from=4.5,to=7,length.out=5),
+                rep(7,times=10),
+                seq(from=7,to=7,length.out=5),
+                rep(7,times=10),
+                7
+                )
+
+
+df2$realX = NA
+df2$realY = NA
+for(i in 1:length(realXseries2)){
+    df2[round(df2$reltime/1000)==(i-1),"realX"] = realXseries2[i]
+    df2[round(df2$reltime/1000)==(i-1),"realY"] = realYseries2[i]
+}
+
+
+for (i in 1:nrow(df2)){
+    df2[i,"beaconX"] <- beacons[beacons$beaconID == df2[i,"beaconID"],"beaconX"]
+    df2[i,"beaconY"] <- beacons[beacons$beaconID == df2[i,"beaconID"],"beaconY"]
+    df2[i,"realDist"] <- sqrt((df2[i,"realX"]-df2[i,"beaconX"])^2 + (df2[i,"realY"]-df2[i,"beaconY"])^2)
+}
+
+
+# We predict the values for this walk...
+# First, we apply the trained GAM to the beacon distances
+for(i in 1:nrow(beacons)){
+    beacon1 <- df2[df2$beaconID == beacons[i,"beaconID"],]
+    beacon1[beacon1$distance > ROOMSIZE, "capdistance"] <- ROOMSIZE
+    beacon1[beacon1$distance <= ROOMSIZE, "capdistance"] <- beacon1[beacon1$distance <= ROOMSIZE, "distance"]
+    beacon1$madistance <- ma(ts(beacon1$capdistance),order=5)
+    beacon1$maproximity <- round(ma(ts(beacon1$proximity),order=3))
+    beacon1$marssi <- ma(ts(beacon1$rssi),order=5)
+
+    name <- as.character(beacons[i,"beaconID"])
+    fit <- beaconFits[[name]]
+
+    plot(beacon1$reltime,beacon1$distance,type="l")
+    lines(beacon1$reltime,beacon1$realDist,col="red")
+    lines(beacon1$reltime,predict(fit,newdata = beacon1),col="green")
+
+    df2[df2$beaconID == beacons[i,"beaconID"],"fittedDistGAM"] <- ifelse(predict(fit,newdata = beacon1)>0, predict(fit,newdata = beacon1), 0) 
+}
+
+# Then we do the trilateration with these improved values
+pred2 <- data.frame(time=unique(round(df2$reltime/1000)),realX=NA,realY=NA,predXGAM=NA,predYGAM=NA)    
+for(i in unique(round(df2$reltime/1000))){
+    
+    pred2[i,"realX"] <- unique(df2[round(df2$reltime/1000)==i,"realX"])[[1]]
+    pred2[i,"realY"] <- unique(df2[round(df2$reltime/1000)==i,"realY"])[[1]]
+
+## Plotting of the original data
+#   plot(beacons$beaconX,beacons$beaconY,xlim=c(-10,11),ylim=c(-8,17))   
+#    subset <- df2[round(df2$reltime/1000)==i,]
+#    points(subset$realX,subset$realY, pch="x", cex=2)
+#     for(beacon in beacons$beaconID){
+#         draw.circle(beacons[beacons$beaconID==beacon,"beaconX"],beacons[beacons$beaconID==beacon,"beaconY"],radius=subset[subset$beaconID==beacon,"fittedDistGAM"],border="green")
+#     }
+
+    # We estimate the position, see http://gis.stackexchange.com/questions/93126/trilateration-algorithm-for-n-amount-of-points-in-r
+    subset <- df2[round(df2$reltime/1000)==i,c("beaconID","distance","fittedDistGAM")]
+    data <- merge(subset,beacons)
+    
+    #This code does not work?
+    #norm_vec <- function(x) sqrt(sum((x[1]-data$beaconX)^2+(x[2]-data$beaconY)^2))-sum(data$distance)
+    #fit <- nlm(norm_vec,c(mean(data$beaconX),mean(data$beaconY)))
+    #fit$code
+    
+    #We also try the trilateration without GAM, just in case
+    norm_vec <- function(x) sum(((sqrt((x[1]-data$beaconX)^2+(x[2]-data$beaconY)^2) - data$distance)^2)/(1+data$distance^2))
+    fit <- nlm(norm_vec,c(mean(data$beaconX),mean(data$beaconY)))
+
+    norm_vec2 <- function(x) sum(((sqrt((x[1]-data$beaconX)^2+(x[2]-data$beaconY)^2) - data$fittedDistGAM)^2)/(1+data$fittedDistGAM^2))
+    fit2 <- nlm(norm_vec2,c(mean(data$beaconX),mean(data$beaconY)))
+
+    pred2[i,"predX"] <- fit$estimate[1]
+    pred2[i,"predY"] <- fit$estimate[2]
+        
+    pred2[i,"predXGAM"] <- fit2$estimate[1]
+    pred2[i,"predYGAM"] <- fit2$estimate[2]
+    
+## Plotting the predicted points
+#    points(fit2$estimate[1],fit2$estimate[2], pch="o", cex=2, col="green")
+#    cat ("Press [enter] to continue")
+#    line <- readline()
+}
+
+# We try additional smoothing
+pred2$predXsmooth <- ma(pred2$predX, order=5)
+pred2$predYsmooth <- ma(pred2$predY, order=5)
+pred2$predXGAMsmooth <- ma(pred2$predXGAM, order=5)
+pred2$predYGAMsmooth <- ma(pred2$predYGAM, order=5)
+
+pred2 <- pred2[complete.cases(pred2),]
+
+distanceError <- sqrt((pred2$predX - pred2$realX)^2 + (pred2$predY - pred2$realY)^2)
+mean(distanceError)
+sd(distanceError)
+distanceError2 <- sqrt((pred2$predXsmooth - pred2$realX)^2 + (pred2$predYsmooth - pred2$realY)^2)
+mean(distanceError2)
+sd(distanceError2)
+
+
+distanceErrorGAM <- sqrt((pred2$predXGAM - pred2$realX)^2 + (pred2$predYGAM - pred2$realY)^2)
+mean(distanceErrorGAM)
+sd(distanceErrorGAM)
+distanceErrorGAM2 <- sqrt((pred2$predXGAMsmooth - pred2$realX)^2 + (pred2$predYGAMsmooth - pred2$realY)^2)
+mean(distanceErrorGAM2)
+sd(distanceErrorGAM2)
+
+
+#error <- as.data.frame(distanceError)
+#ggplot(error, aes(x=distanceError)) + geom_density(alpha=.2, fill="#FF6666")
+plot(pred2$time,pred2$realX,type="l",ylim=c(-5,12))
+lines(pred2$time,pred2$predX,col="orange")
+lines(pred2$time,pred2$predXsmooth,col="red")
+lines(pred2$time,pred2$predXGAM,col="green")
+lines(pred2$time,pred2$predXGAMsmooth,col="blue")
+lines(pred2$time,pred2$realY,lty=2)
+#lines(pred1$time,pred1$predXLM,col="orange")
+lines(pred2$time,pred2$predY,lty=2,col="orange")
+lines(pred2$time,pred2$predYsmooth,lty=2,col="red")
+lines(pred2$time,pred2$predYGAM,lty=2,col="green")
+lines(pred2$time,pred2$predYGAMsmooth,lty=2,col="blue")
+
+# Plot of the real and predicted space distribution
+ggplot(pred2, aes(x = realX, y = realY)) + 
+    geom_point(size=5) + 
+    geom_point(data=pred2, mapping=aes(x=predX, y=predY, shape="b"),alpha=0.2,col="orange",size=5) +
+    geom_point(data=pred2, mapping=aes(x=predXsmooth, y=predYsmooth, shape="c"),alpha=0.2,col="red",size=5) +
+    geom_point(data=pred2, mapping=aes(x=predXGAM, y=predYGAM, shape="b"),alpha=0.2,col="green",size=5) +
+    geom_point(data=pred2, mapping=aes(x=predXGAMsmooth, y=predYGAMsmooth, shape="c"),alpha=0.2,col="blue",size=5)
+
+```
+
+* As we can see, error is huge (2.4m with the GAM-trained trilateration)! 
+* Smoothing of the predicted coordinates seems to help a bit in every case (2.4m vs. 2.7m)
+* And actually, it works better if we use the (smoothed) plain trilateration, not the trilateration trained through GAM in a calibration walk (1.5m vs. 2.4m)!
+
+
+-------------
+
+# OLD ATTEMPTS
 
 ## Model 1: per-sample nonlinear trilateration (no training)
 
@@ -344,7 +668,6 @@ sd(distanceError)
 
 error <- as.data.frame(distanceError)
 ggplot(error, aes(x=distanceError)) + geom_density(alpha=.2, fill="#FF6666")
-
 ```
 
 
