@@ -160,6 +160,7 @@ for(i in unique(round(df$reltime/1000))){
     #fit <- nlm(norm_vec,c(mean(data$beaconX),mean(data$beaconY)))
     #fit$code
     
+# TODO: try weighted trilateration? I think our formula is already weighted! the closest beacons are given more importance
     norm_vec <- function(x) sum(((sqrt((x[1]-data$beaconX)^2+(x[2]-data$beaconY)^2) - data$fittedDistLM)^2)/(1+data$fittedDistLM^2))
     fit <- nlm(norm_vec,c(mean(data$beaconX),mean(data$beaconY)))
 
@@ -225,8 +226,8 @@ ggplot(pred1, aes(x = realX, y = realY)) +
 
 
 
-# TODO: try weighted trilateration?
 
+# TODO: try kalman filter... but how to model it?
 
 ```
 
@@ -398,6 +399,10 @@ ggplot(pred2, aes(x = realX, y = realY)) +
     geom_point(data=pred2, mapping=aes(x=predXsmooth, y=predYsmooth, shape="c"),alpha=0.2,col="red",size=5) +
     geom_point(data=pred2, mapping=aes(x=predXGAM, y=predYGAM, shape="b"),alpha=0.2,col="green",size=5) +
     geom_point(data=pred2, mapping=aes(x=predXGAMsmooth, y=predYGAMsmooth, shape="c"),alpha=0.2,col="blue",size=5)
+
+
+# We save the estimation data, for plotting elsewhere
+save(pred1, pred2, file = "predictionsWalk1-2.Rda")
 
 ```
 
