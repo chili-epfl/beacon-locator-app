@@ -41,7 +41,7 @@ output: rmarkdown::tufte_handout
 * Startups in the area[^startups] include Estimote
 
 # Commercially Available Systems
-* A quite complete and recent review/thesis[^mautz2010] has found and categorized systems belonging to 13 different technologies, and concludes that >1m accuracy is really hard to find, with reasonable cost/infrastructure
+* A quite complete and recent review/thesis[^mautz2012] has found and categorized systems belonging to 13 different technologies, and concludes that <1m accuracy is really hard to find, with reasonable cost/infrastructure
 * From that list and Microsoft's latest challenge, some of the most promising options, that are available commercially:
     * ABATEC[^abatec]: Tracking for sports events, apparently centimeter precision
     * UbiSense[^ubisense]: claims to achieve 15cm accuracy, and has some kind of "research kit"
