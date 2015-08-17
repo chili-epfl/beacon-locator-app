@@ -9,87 +9,180 @@ output: rmarkdown::tufte_handout
 
 # Introduction
 
-* What is indoor location, microlocation [^tufte_latex]. 
-* Typical uses
-* Technologies
-* Our purpose with this investigation
-* Structure of the document
+* Indoor location, Indoor positioning systems (IPS), also known by the name of "microlocation" are technological solutions to locate objects or people inside a building (where other methods like GPS cannot operate)
+* Typical uses of these systems include augmented reality applications such as guided museum or city tours, store or warehouse or airport navigation, targeted advertising, sports, etc.
+* A variety of technologies have been used to implement these systems, with varying degrees of success and accuracy: radio-frequency, infra-red (IR), acoustic signals, inertial measurements and even Earth's magnetic field
+* Our plan is to perform experiments with school teachers, where we provide them with a map of their movements in the classroom, so that they can reflect on the patterns that they observe
+* Thus, we need an IPS solution that can track the teacher with enough accuracy to provide meaningful patterns/insights (e.g., <1m error)
+* This document summarizes a) a survey of the IPS field (both research and commercial solutions) to find an accurate-enouogh solution we can use in a classroom, as well as b) the results of our first experiments with BLE beacons in our lab's meeting room
 
 # Survey on Indoor Location Methods
 
 ## Performance Metrics
-* The most commonly used is accuracy or location error (mean distance error between the detected and the real position)
-* Other metrics include precision (robustness of the positioning, e.g., standard deviation of the location error, or its distribution, e.g., 90% within 2.3m), complexity (hardware, software, operational -- often indicated by the location rate or lag), robustness (to the unavailability of certain signals/units), scalability (how large can the indoor location grow, and whether location is 2D or 3D), and of course, cost (including energy consumption too).
+* The most commonly used is *accuracy or location error* (mean distance error between the detected and the real position)
+* Other metrics include *precision* (either robustness of the positioning, e.g., standard deviation of the location error, or its distribution, e.g., 90% within 2.3m), *complexity* (hardware, software, operational -- often indicated by the location rate or lag), *robustness* (to the unavailability of certain signals/units), *scalability* (how large can the indoor location grow, and whether location is 2D or 3D), and of course, *cost* (including energy consumption too).
 * Given our aim of measuring positions in a classroom, we will mainly use *accuracy* and *precision* as the main metrics, with an eye on cost, complexity and robustness
 
 ## Systems and Solutions
-* The resolution/accuracy of methods depends largely on the wireless technology being used (Fig. 1). We see that, for accuracy <1m, RF hybrid methods or UWB/microwave seem the best bet
+* The resolution/accuracy of methods depends largely on the wireless technology being used (Fig. 1). We see that, for accuracies <1m, RF hybrid methods or UWB/microwave seem the best bet
 \begin{figure}
 \includegraphics{img/liu2007technologies}
 \caption{Wireless technologies used in indoor location and their typical accuracies}
 \end{figure}
-* In a 2007 review[^liu2007], we see a list of systems and methods. The ones with <1m accuracy are: Ekahau, Ubisense, Sappire Dart, SmartLOCUS, EIRIS, Pinpoint 3D-ID
-    * Based on WLAN/Wifi, UWB, WLAN+ultrasound, IR+UHF, UHF
-* Another review[^koyuncu2010] also mentions several systems that achieve <1m accuracy: Active badge (IR), Active bat (ultrasound), Cricket (ultrasound), Dolphin (RF+ultrasound), UWB, or computer vision methods
-    * However, IR and ultrasound seem to require a dense layout of receivers in the ceiling, which can be hard to install in a school
-* A more recent review [^bastos2015] also puts the emphasis on RF and UWB solutions, and mentions a lack of studies about BLE (a recently emerged technology)
-    * For example, there are RF systems[^duckworth2007] that put (quite conspicuous) antennas outside the building, and achieve 0.7m accuracy (probably better if the antennas were inside?)
-* Ultrasound systems seem to have very high accuracies up to a few centimeters... but as noted by [^ijaz2013], these systems often require synchronized nodes and/or are prone to interference by ultrasound noise 
-* There exist also systems based on existing WiFi infrastructure, such as [^anyplace], however the accuracy seems to be around 2m
-* One of the most prominent recent contenders is Bluetooth (especially, BLE and iBeacon promoted by Apple), although experts say that it is more aimed at indoor *proximity*, not indoor location
-* Another good source for systems and algorithms is Microsoft's yearly indoor location competition[^ipsn2015], 
-* Startups in the area[^startups] include Estimote
+* Ultrasound systems seem to have very high accuracies up to a few centimeters... but as noted by [^ijaz2013], these systems often require synchronized nodes, a dense grid of receptors (difficult to install in a school) and/or are prone to interference by ultrasound noise 
+<!--* There exist also systems based on existing WiFi infrastructure, such as [^anyplace], however the accuracy seems to be around 2m-->
+* Looking into several reviews of the field [^liu2007] [^koyuncu2010] [^bastos2015], we find several methods and systems with <1m accuracy: Ekahau (WLAN/Wifi), Ubisense (UWB), Sappire Dart (WLAN+ultrasound), SmartLOCUS (IR+UHF), EIRIS, Pinpoint 3D-ID (UHF), Active badge (IR), Active bat (ultrasound), Cricket (ultrasound), Dolphin (RF+ultrasound), UWB, or computer vision methods
+<!--* For example, there are RF systems[^duckworth2007] that put (quite conspicuous) antennas outside the building, and achieve 0.7m accuracy-->
+* One of the most prominent recent contenders are Bluetooth-based (especially, BLE and the iBeacon technology promoted by Apple), although experts say that it is more aimed at indoor *proximity* (activate something when very close to a beacon), not indoor *location* (determining distance to one or more beacons)
+* However, this sector is moving fast, there are a number of startups working at this problem that might have interesting results soon [^startups]
 
-# Commercially Available Systems
-* A quite complete and recent review/thesis[^mautz2012] has found and categorized systems belonging to 13 different technologies, and concludes that <1m accuracy is really hard to find, with reasonable cost/infrastructure
-* From that list and Microsoft's latest challenge, some of the most promising options, that are available commercially:
-    * ABATEC[^abatec]: Tracking for sports events, apparently centimeter precision
-    * UbiSense[^ubisense]: claims to achieve 15cm accuracy, and has some kind of "research kit"
-    * Cricket[^cricket]: dates from 2005, but still has very high accuracy and it is an open architecture/product
-    * NorthStar[^northstar]: based on infrared light, is said to achieve 10cm accuracy
-    * ALPS[^plazik2015]: based on a combination of BLE+ultrasound, uses a normal mobile phone as receiver and seems to achieve 0.4m accuracy
-
+## The Bottom Line: Most Likely Options
+* A quite complete and recent review/thesis [^mautz2012] has found and categorized systems belonging to 13 different technologies, and concludes that <1m accuracy is really hard to find, with reasonable cost/infrastructure
+* From that list, and Microsoft's latest "IPS competition" [^ipsn2015], some of the most promising options, that are available commercially or might be made available to us are:
+    * ABATEC [^abatec]: Tracking for sports events, apparently centimeter precision. **Contacted by email, awaiting response**
+    * UbiSense [^ubisense]: claims to achieve 15cm accuracy, and has some kind of "location kit" for research use. **Contacted them, their solution would have more likely an accuracy of 0.3m, the price tag is 12500 euro (!)**
+    <!--* NorthStar [^northstar]: based on infrared light, is said to achieve 10cm accuracy. **Got bought by Roomba's iRobot**-->
+    * Cricket [^cricket]: dates from 2005, but still claims high accuracy and it is an open architecture/product (now sold by stores like [^willow]). **Contacted by email, awaiting response**
+    <!--* ALPS [^plazik2015]: based on a combination of BLE+ultrasound, uses a normal mobile phone as receiver and seems to achieve 0.3m accuracy. **Looks like it is still a research prototoype?**-->
 
 # The Case of BLE Beacons (Estimote)
 
-* As a first approximation to this idea, we bought (cheap) Estimote BLE beacons, and did some experiments with its indoor location mechanisms
+* As a first approximation to this idea of a teacher location map, we bought (cheap) Estimote [^estimote] BLE beacons, and did some experiments with its indoor location mechanisms
 
 ## Initial Test Runs
 
 * As an initial test of the technology, I did a "calibration walk" in our meeting room, in which the true location is known (for every second), with the hope of adjusting the signals of each beacon and get more accurate results
 * Then, results were tested on a second "test walk", in which the true position is also known in advance
-
-```{r, echo=F, message=FALSE, warning=FALSE, fig.width = 6, fig.height = 4, fig.cap = "Real and estimated positions during the test walk. In black, the true positions. The other colors represent different methods for estimating the position from the beacon signals."}
+```{r, echo=F, message=FALSE, warning=FALSE, fig.width = 6, fig.height = 7, fig.cap = "Real and estimated positions during the (short) test walk. In black, the true positions. The other colors represent different methods for estimating the position from the beacon signals."}
 require(ggplot2)
+require(grid)
 
 load("./predictionsWalk1-2.Rda")
 
-# Plot of the real and predicted space distribution
+beacons <- data.frame(beaconNr=1:6,beaconID=c("2982-17929","11667-6916","33875-41478","33198-27248","62375-26168","55326-46713"),beaconX=c(0,-2,-2,2,3,3.4),beaconY=c(0,2.7,6.4,8.9,5.8,1.8))
+
+curve1 <- curveGrob(1, 0, 0, 1, shape=0.7, curvature=-0.7)
+curve2 <- curveGrob(0, 0, 1, 1, shape=0.7, curvature=-0.7)
+curve3 <- curveGrob(0, 1, 1, 0, shape=0.7, curvature=-0.7)
+curve4 <- curveGrob(1, 1, 0, 0, shape=0.7, curvature=-0.7)
+datapoly1 <- data.frame(x = c(-0.5,0.5,0.5,-0.5), y = c(9,9,8,8))
+datapoly2 <- data.frame(x = c(3.1,3.1,2.1,2.1), y = c(7.5,6.5,6.5,7.5))
+datapoly3 <- data.frame(x = c(3.1,3.1,2.1,2.1), y = c(4.5,3.5,3.5,4.5))
+datapoly4 <- data.frame(x = c(-2.1,-1.1,-1.1,-2.1), y = c(6.75,6.75,5.75,5.75))
+datapoly5 <- data.frame(x = c(-2.1,-1.1,-1.1,-2.1), y = c(3.5,3.5,2.5,2.5))
+
+# Plot of the real and predicted space distribution, as well as the class walls
 ggplot(pred2, aes(x = realX, y = realY)) + 
     geom_point(size=5) + 
     geom_point(data=pred2, mapping=aes(x=predX, y=predY, shape="b"),alpha=0.2,col="orange",size=5) +
     geom_point(data=pred2, mapping=aes(x=predXsmooth, y=predYsmooth, shape="c"),alpha=0.2,col="red",size=5) +
     geom_point(data=pred2, mapping=aes(x=predXGAM, y=predYGAM, shape="b"),alpha=0.2,col="green",size=5) +
-    geom_point(data=pred2, mapping=aes(x=predXGAMsmooth, y=predYGAMsmooth, shape="c"),alpha=0.2,col="blue",size=5)
+    geom_point(data=pred2, mapping=aes(x=predXGAMsmooth, y=predYGAMsmooth, shape="c"),alpha=0.2,col="blue",size=5) +
+    geom_point(data=beacons, mapping=aes(x=beaconX, y=beaconY), alpha=1, col="grey", size=3) + theme_bw() +
+#    geom_polygon(data = datapoly1, aes(x=x, y=y), colour="black", fill=NA) +
+#    geom_polygon(data = datapoly2, aes(x=x, y=y), colour="black", fill=NA) +
+#    geom_polygon(data = datapoly3, aes(x=x, y=y), colour="black", fill=NA) +
+#    geom_polygon(data = datapoly4, aes(x=x, y=y), colour="black", fill=NA) +
+#    geom_polygon(data = datapoly5, aes(x=x, y=y), colour="black", fill=NA) +
+    geom_segment(aes(x = -0.5, y = -0.1, xend = 2.5, yend = -0.1)) + 
+    geom_segment(aes(x = -2.1, y = 1.5, xend = -2.1, yend = 7.5)) +
+    geom_segment(aes(x = 3.1, y = 7.9, xend = 3.1, yend = 3.5)) +
+    geom_segment(aes(x = -0.5, y = 9, xend = 2, yend = 9)) +
+    geom_segment(aes(x = 3.1, y = 3.5, xend = 3.5, yend = 3.5)) +
+    geom_segment(aes(x = 3.5, y = 3.5, xend = 3.5, yend = 0.9)) +
+    annotation_custom(grob=curve1,-0.5,-2.1,-0.1,1.5) +
+    annotation_custom(grob=curve2,-2.1,-0.5,7.5,9) +
+    annotation_custom(grob=curve3,2,3.1,9,7.9) +
+    annotation_custom(grob=curve4,3.5,2.5,0.9,-0.1)
 
 distanceError2 <- sqrt((pred2$predXsmooth - pred2$realX)^2 + (pred2$predYsmooth - pred2$realY)^2)
 #mean(distanceError2)
 ```
 * As we can see in Fig. 1, results are not very accurate: using our most accurate method (see the red triangles in Fig. 1), the mean error was of `r mean(distanceError2)` meters (and it looks like this is because the method keeps the positions always near the center of the room!)
 
+
 ## A Real Case: Journee des Classes 2015
 
-* As a more real estimation of accuracy in real settings (as furniture and people can interfere with the beacon positioning), we compared the beacon positioning with a "real position" (also estimated, but from the video feed of the eyetracker and chilitags placed in the walls)
+* Using this kind of position estimation for the data data gathered during the JdC2015 experiment...
 
-```{r, echo=F, message=FALSE, warning=FALSE, fig.width = 6, fig.height = 4, fig.cap = "Some caption"}
+```{r, eval=T, echo=F, message=FALSE, warning=FALSE, fig.width = 6, fig.height = 7, fig.cap = "Real and estimated positions during the test walk. In black, the true positions. The other colors represent different methods for estimating the position from the beacon signals."}
+require(ggplot2)
+require(grid)
 
-# Show some figure with the positions estimated from chilitags (only in the times where chilitag is visible), and the predicted beacon positions with different methods
+load("./cleanTrackerData.Rda")
 
+beacons <- data.frame(beaconNr=1:6,beaconID=c("2982-17929","11667-6916","33875-41478","33198-27248","62375-26168","55326-46713"),beaconX=c(0,-2,-2,2,3,3.4),beaconY=c(0,2.7,6.4,8.9,5.8,1.8))
+
+#We remove the accelerometer data, keeping only the position
+trackerData <- trackerData[complete.cases(trackerData$distance),4:9]
+for (i in 1:nrow(trackerData)){
+    trackerData[i,"beaconX"] <- beacons[beacons$beaconID == trackerData[i,"beaconID"],"beaconX"]
+    trackerData[i,"beaconY"] <- beacons[beacons$beaconID == trackerData[i,"beaconID"],"beaconY"]
+#    df[i,"realDist"] <- sqrt((df[i,"realX"]-df[i,"beaconX"])^2 + (df[i,"realY"]-df[i,"beaconY"])^2)
+}
+
+#TODO: Do both trilateration and smoothed trilateration positioning for JdC tracker estimations
+pred1 <- data.frame(time=unique(round(trackerData$timestamp/1000)), predX=NA,predY=NA, predXsmooth=NA,predYsmooth=NA)    
+
+for(i in unique(round(trackerData$timestamp/1000))){
+
+    subset <- trackerData[round(trackerData$timestamp/1000)==i,c("beaconID","distance")]
+    data <- merge(subset,beacons)
+
+    norm_vec <- function(x) sum(((sqrt((x[1]-data$beaconX)^2+(x[2]-data$beaconY)^2) - data$distance)^2)/(1+data$distance^2))
+    fit <- nlm(norm_vec,c(mean(data$beaconX),mean(data$beaconY)))
+
+    pred1[i,"predX"] <- fit$estimate[1]
+    pred1[i,"predY"] <- fit$estimate[2]
+
+}
+pred1$predXsmooth <- ma(pred1$predX, order=5)
+pred1$predYsmooth <- ma(pred1$predY, order=5)
+
+
+
+curve1 <- curveGrob(1, 0, 0, 1, shape=0.7, curvature=-0.7)
+curve2 <- curveGrob(0, 0, 1, 1, shape=0.7, curvature=-0.7)
+curve3 <- curveGrob(0, 1, 1, 0, shape=0.7, curvature=-0.7)
+curve4 <- curveGrob(1, 1, 0, 0, shape=0.7, curvature=-0.7)
+datapoly1 <- data.frame(x = c(-0.5,0.5,0.5,-0.5), y = c(9,9,8,8))
+datapoly2 <- data.frame(x = c(3.1,3.1,2.1,2.1), y = c(7.5,6.5,6.5,7.5))
+datapoly3 <- data.frame(x = c(3.1,3.1,2.1,2.1), y = c(4.5,3.5,3.5,4.5))
+datapoly4 <- data.frame(x = c(-2.1,-1.1,-1.1,-2.1), y = c(6.75,6.75,5.75,5.75))
+datapoly5 <- data.frame(x = c(-2.1,-1.1,-1.1,-2.1), y = c(3.5,3.5,2.5,2.5))
+
+# Plot of the real and predicted space distribution, as well as the class walls
+# TODO: TEST!!!!!!!
+ggplot(pred2, aes(x = realX, y = realY)) + 
+    geom_point(size=5) + 
+    geom_point(data=pred1, mapping=aes(x=predX, y=predY, shape="b"),alpha=0.2,col="orange",size=5) +
+    geom_point(data=pred1, mapping=aes(x=predXsmooth, y=predYsmooth, shape="c"),alpha=0.2,col="red",size=5) +
+    geom_point(data=beacons, mapping=aes(x=beaconX, y=beaconY), alpha=1, col="grey", size=3) + theme_bw() +
+    geom_polygon(data = datapoly1, aes(x=x, y=y), colour="black", fill=NA) +
+    geom_polygon(data = datapoly2, aes(x=x, y=y), colour="black", fill=NA) +
+    geom_polygon(data = datapoly3, aes(x=x, y=y), colour="black", fill=NA) +
+    geom_polygon(data = datapoly4, aes(x=x, y=y), colour="black", fill=NA) +
+    geom_polygon(data = datapoly5, aes(x=x, y=y), colour="black", fill=NA) +
+    geom_segment(aes(x = -0.5, y = -0.1, xend = 2.5, yend = -0.1)) + 
+    geom_segment(aes(x = -2.1, y = 1.5, xend = -2.1, yend = 7.5)) +
+    geom_segment(aes(x = 3.1, y = 7.9, xend = 3.1, yend = 3.5)) +
+    geom_segment(aes(x = -0.5, y = 9, xend = 2, yend = 9)) +
+    geom_segment(aes(x = 3.1, y = 3.5, xend = 3.5, yend = 3.5)) +
+    geom_segment(aes(x = 3.5, y = 3.5, xend = 3.5, yend = 0.9)) +
+    annotation_custom(grob=curve1,-0.5,-2.1,-0.1,1.5) +
+    annotation_custom(grob=curve2,-2.1,-0.5,7.5,9) +
+    annotation_custom(grob=curve3,2,3.1,9,7.9) +
+    annotation_custom(grob=curve4,3.5,2.5,0.9,-0.1)
 
 ```
 
 
-# Conclusions: What Are the Alternatives?
+# Discussion: What Are Our Alternatives?
+
+* Use one of the options provided in the survey
+* Use 2m-accuracy beacons (might be good for longer periods of time)
+* Change our strategy to something using proximity (a symbolic map of the class?), similar to Slotta & Moher's "embedded phenomena" [^moher2015]
+
 
 
 
@@ -121,4 +214,10 @@ distanceError2 <- sqrt((pred2$predXsmooth - pred2$realX)^2 + (pred2$predYsmooth 
 
 [^startups]: https://angel.co/indoor-positioning
 
-[^plazik2015]: http://research.microsoft.com/en-US/events/indoorloccompetition2015/ipsn_lazik.pdf
+[^plazik2015]: http://wise.ece.cmu.edu/redmine/projects/alps/wiki
+
+[^estimote]: http://estimote.com/
+
+[^moher2015]: Moher, T., Slotta, J., Acosta, A., Cober, R., Dasgupta, C., Fong, C., ... & Peppler, K. Knowledge Construction in the Instrumented Classroom: Supporting Student Investigations of Their Physical Learning Environment. *Proceedings of the CSCL 2015 Conference*.
+
+[^willow]: http://www.willow.co.uk/html/mcs410-_mcs_cricket_series.php
