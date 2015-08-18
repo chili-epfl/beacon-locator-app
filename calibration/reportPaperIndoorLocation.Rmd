@@ -3,7 +3,7 @@ title: "Indoor Classroom Location: A Survey and Case Study"
 subtitle: Internal Technical Report (maybe workshop paper?)
 author: "Luis P. Prieto"
 date: "August 13th, 2015"
-abstract: With the advent of new low-energy wireless standards like BLE, affordable indoor location is becoming finally feasible. With the aim of using such location in our research to provide spatial and pedagogical "orchestration maps", I have surveyed different technologies for indoor location, and I have tested one specific brand of BLE beacons. The main conclusion of our tests with Estimote beacons is that accuracy ... . Feasible alternatives on the market include ...
+abstract: With the advent of new low-energy wireless standards like BLE, affordable indoor location is becoming finally feasible. With the aim of using such location in our research to provide spatial and pedagogical "orchestration maps", I have surveyed different technologies for indoor location, and I have tested one specific brand of BLE beacons. The main conclusion of our tests with Estimote beacons is that accuracy is around 1.5m. If we want higher accuracy, especially for a moving target, there are (costly) alternative technologies on the market. In the end, it all boils down to what kind of information we want to obtain.
 output: rmarkdown::tufte_handout
 ---
 
@@ -39,10 +39,10 @@ output: rmarkdown::tufte_handout
 ## The Bottom Line: Most Likely Options
 * A quite complete and recent review/thesis [^mautz2012] has found and categorized systems belonging to 13 different technologies, and concludes that <1m accuracy is really hard to find, with reasonable cost/infrastructure
 * From that list, and Microsoft's latest "IPS competition" [^ipsn2015], some of the most promising options, that are available commercially or might be made available to us are:
-    * ABATEC [^abatec]: Tracking for sports events, apparently centimeter precision. **Contacted by email, awaiting response**
-    * UbiSense [^ubisense]: claims to achieve 15cm accuracy, and has some kind of "location kit" for research use. **Contacted them, their solution would have more likely an accuracy of 0.3m, the price tag is 12500 euro (!)**
+    * ABATEC [^abatec]: Tracking for sports events, apparently centimeter precision. It consists on a set of transmitters in tripods around the area to track, plus a small transmitter that can be worn or put in the pocket. **Contacted by email, awaiting response**
+    * UbiSense [^ubisense]: claims to achieve 15cm accuracy, and has some kind of "location kit" for research use. It works by putting four box-sized modules on the room corners, plus a small device in the teacher's pocket. **Contacted them, their solution would have more likely an accuracy of 0.3m, the price tag is 12500 euro (!)**
     <!--* NorthStar [^northstar]: based on infrared light, is said to achieve 10cm accuracy. **Got bought by Roomba's iRobot**-->
-    * Cricket [^cricket]: dates from 2005, but still claims high accuracy and it is an open architecture/product (now sold by stores like [^willow]). **Contacted by email, awaiting response**
+    * Cricket [^cricket]: dates from 2005, but still claims high accuracy and it is an open architecture/product (now sold by stores like [^willow]). It works by putting 6-8 of these small modules on the ceiling, plus a transmitter on the teacher (we would have to tinker a bit to make the receptor wearable). **Contacted them, a package for indoor location would cost around 2500 euro, deliverable in about 3 weeks**
     <!--* ALPS [^plazik2015]: based on a combination of BLE+ultrasound, uses a normal mobile phone as receiver and seems to achieve 0.3m accuracy. **Looks like it is still a research prototoype?**-->
 
 # The Case of BLE Beacons (Estimote)
@@ -53,7 +53,7 @@ output: rmarkdown::tufte_handout
 
 * As an initial test of the technology, I did a "calibration walk" in our meeting room, in which the true location is known (for every second), with the hope of adjusting the signals of each beacon and get more accurate results
 * Then, results were tested on a second "test walk", in which the true position is also known in advance
-```{r, echo=F, message=FALSE, warning=FALSE, fig.width = 6, fig.height = 7, fig.cap = "Real and estimated positions during the (short) test walk. In black, the true positions. The other colors represent different methods for estimating the position from the beacon signals."}
+```{r, echo=F, message=FALSE, warning=FALSE, fig.margin=TRUE, fig.width = 6, fig.height = 7, fig.cap = "Real and estimated positions during the (short) test walk. In black, the true positions. The other colors represent different methods for estimating the position from the beacon signals."}
 require(ggplot2)
 require(grid)
 
@@ -97,36 +97,106 @@ ggplot(pred2, aes(x = realX, y = realY)) +
 
 distanceError2 <- sqrt((pred2$predXsmooth - pred2$realX)^2 + (pred2$predYsmooth - pred2$realY)^2)
 #mean(distanceError2)
+
+findStaticSamples <- function(data, threshold=1){
+    isStatic <- logical()
+    isStatic[1] <- FALSE
+    for(i in 2:nrow(data)){
+        isStatic[i] <- (sqrt((data[i,"predX"]-data[i-1,"predX"])^2+(data[i,"predY"]-data[i-1,"predY"])^2))<=threshold
+    }
+    isStatic    
+}
+
+pred2$static <- findStaticSamples(pred2, 1) # We find which samples move less than 0.5m from the previous one
+pred2static <- pred2[pred2$static==TRUE,]
+distanceError3 <- sqrt((pred2static$predX - pred2static$realX)^2 + (pred2static$predY - pred2static$realY)^2)
+#mean(distanceError3)
 ```
-* As we can see in Fig. 1, results are not very accurate: using our most accurate method (see the red triangles in Fig. 1), the mean error was of `r mean(distanceError2)` meters (and it looks like this is because the method keeps the positions always near the center of the room!)
+* As we can see in Fig. 1, results are not very accurate: using our most accurate smoothing method (see the red triangles in Fig. 1), the mean error was of `r mean(distanceError2)` meters (and it looks like this is because the method keeps the positions always near the center of the room!). 
+* An alternative method which just considers the *static* triangulated positions (those that vary less than 1m in one second to the next) performs better (average error of `r mean(distanceError3)` meters), by discarding about half of the position data
 
 
 ## A Real Case: Journee des Classes 2015
 
-* Using this kind of position estimation for the data data gathered during the JdC2015 experiment...
+* Using this kind of position estimation for the data data gathered during the JdC2015 experiment, we can start to have "classroom movement heatmaps":
+    * Gathering the data from all four sessions (Fig. 3, left), we see how the layout of the classroom (tabletops at the edges) influences the teacher overall position to be rather near the center, and towards his own desk (in the top of the figure)
+    * We also can see the difference between sessions where the teacher had a helper handling the left half of the tables (Fig. 3, right), and the sessions that were managed without help (Fig. 3, center)
 
-```{r, eval=T, echo=F, message=FALSE, warning=FALSE, fig.width = 6, fig.height = 7, fig.cap = "Real and estimated positions during the test walk. In black, the true positions. The other colors represent different methods for estimating the position from the beacon signals."}
+```{r, eval=T, echo=F, message=FALSE, warning=FALSE, fig.width = 15, fig.height = 6, fig.cap = "Estimated positions during Journee des Classes 2015", fig.fullwidth = TRUE}
 require(ggplot2)
 require(grid)
+require(forecast)
+
+# Multiple plot function
+#
+# ggplot objects can be passed in ..., or to plotlist (as a list of ggplot objects)
+# - cols:   Number of columns in layout
+# - layout: A matrix specifying the layout. If present, 'cols' is ignored.
+#
+# If the layout is something like matrix(c(1,2,3,3), nrow=2, byrow=TRUE),
+# then plot 1 will go in the upper left, 2 will go in the upper right, and
+# 3 will go all the way across the bottom.
+#
+multiplot <- function(..., plotlist=NULL, file, cols=1, layout=NULL) {
+  library(grid)
+
+  # Make a list from the ... arguments and plotlist
+  plots <- c(list(...), plotlist)
+
+  numPlots = length(plots)
+
+  # If layout is NULL, then use 'cols' to determine layout
+  if (is.null(layout)) {
+    # Make the panel
+    # ncol: Number of columns of plots
+    # nrow: Number of rows needed, calculated from # of cols
+    layout <- matrix(seq(1, cols * ceiling(numPlots/cols)),
+                    ncol = cols, nrow = ceiling(numPlots/cols))
+  }
+
+ if (numPlots==1) {
+    print(plots[[1]])
+
+  } else {
+    # Set up the page
+    grid.newpage()
+    pushViewport(viewport(layout = grid.layout(nrow(layout), ncol(layout))))
+
+    # Make each plot, in the correct location
+    for (i in 1:numPlots) {
+      # Get the i,j matrix positions of the regions that contain this subplot
+      matchidx <- as.data.frame(which(layout == i, arr.ind = TRUE))
+
+      print(plots[[i]], vp = viewport(layout.pos.row = matchidx$row,
+                                      layout.pos.col = matchidx$col))
+    }
+  }
+}
 
 load("./cleanTrackerData.Rda")
 
 beacons <- data.frame(beaconNr=1:6,beaconID=c("2982-17929","11667-6916","33875-41478","33198-27248","62375-26168","55326-46713"),beaconX=c(0,-2,-2,2,3,3.4),beaconY=c(0,2.7,6.4,8.9,5.8,1.8))
 
+ROOMDIAG <- 10.8
+
 #We remove the accelerometer data, keeping only the position
 trackerData <- trackerData[complete.cases(trackerData$distance),4:9]
+#Add beacon coords and cap the beacon distance to the room's biggest diagonal
 for (i in 1:nrow(trackerData)){
     trackerData[i,"beaconX"] <- beacons[beacons$beaconID == trackerData[i,"beaconID"],"beaconX"]
     trackerData[i,"beaconY"] <- beacons[beacons$beaconID == trackerData[i,"beaconID"],"beaconY"]
 #    df[i,"realDist"] <- sqrt((df[i,"realX"]-df[i,"beaconX"])^2 + (df[i,"realY"]-df[i,"beaconY"])^2)
+    trackerData[i,"distance"] <- ifelse(trackerData[i,"distance"]>ROOMDIAG,ROOMDIAG,trackerData[i,"distance"])
 }
 
 #TODO: Do both trilateration and smoothed trilateration positioning for JdC tracker estimations
-pred1 <- data.frame(time=unique(round(trackerData$timestamp/1000)), predX=NA,predY=NA, predXsmooth=NA,predYsmooth=NA)    
+pred1 <- data.frame(time=unique(round(trackerData$timestamp/1000)), session=NA, predX=NA,predY=NA, predXsmooth=NA,predYsmooth=NA)    
 
-for(i in unique(round(trackerData$timestamp/1000))){
+for(i in 1:nrow(pred1)){
 
-    subset <- trackerData[round(trackerData$timestamp/1000)==i,c("beaconID","distance")]
+    time <- pred1$time[[i]]
+    
+    subset <- trackerData[round(trackerData$timestamp/1000)==time,c("beaconID","distance","session")]
     data <- merge(subset,beacons)
 
     norm_vec <- function(x) sum(((sqrt((x[1]-data$beaconX)^2+(x[2]-data$beaconY)^2) - data$distance)^2)/(1+data$distance^2))
@@ -134,12 +204,15 @@ for(i in unique(round(trackerData$timestamp/1000))){
 
     pred1[i,"predX"] <- fit$estimate[1]
     pred1[i,"predY"] <- fit$estimate[2]
-
+    pred1[i,"session"] <- subset$session[[1]]    
 }
 pred1$predXsmooth <- ma(pred1$predX, order=5)
 pred1$predYsmooth <- ma(pred1$predY, order=5)
 
 
+#We limit the coordinates to those within the room (sometimes, I went out of the room)
+pred1lim <- pred1[pred1$predX>=-2 & pred1$predX<=3.5 & pred1$predY>=0 & pred1$predY<=8.9,]
+pred1limsmooth <- pred1[pred1$predXsmooth>=-2 & pred1$predXsmooth<=3.5 & pred1$predYsmooth>=0 & pred1$predYsmooth<=8.9,]
 
 curve1 <- curveGrob(1, 0, 0, 1, shape=0.7, curvature=-0.7)
 curve2 <- curveGrob(0, 0, 1, 1, shape=0.7, curvature=-0.7)
@@ -152,11 +225,8 @@ datapoly4 <- data.frame(x = c(-2.1,-1.1,-1.1,-2.1), y = c(6.75,6.75,5.75,5.75))
 datapoly5 <- data.frame(x = c(-2.1,-1.1,-1.1,-2.1), y = c(3.5,3.5,2.5,2.5))
 
 # Plot of the real and predicted space distribution, as well as the class walls
-# TODO: TEST!!!!!!!
-ggplot(pred2, aes(x = realX, y = realY)) + 
-    geom_point(size=5) + 
-    geom_point(data=pred1, mapping=aes(x=predX, y=predY, shape="b"),alpha=0.2,col="orange",size=5) +
-    geom_point(data=pred1, mapping=aes(x=predXsmooth, y=predYsmooth, shape="c"),alpha=0.2,col="red",size=5) +
+g <- ggplot(pred1lim, aes(x = predX, y = predY, shape="b")) + 
+    geom_point(alpha=0.05,col="orange",size=10) + 
     geom_point(data=beacons, mapping=aes(x=beaconX, y=beaconY), alpha=1, col="grey", size=3) + theme_bw() +
     geom_polygon(data = datapoly1, aes(x=x, y=y), colour="black", fill=NA) +
     geom_polygon(data = datapoly2, aes(x=x, y=y), colour="black", fill=NA) +
@@ -172,16 +242,177 @@ ggplot(pred2, aes(x = realX, y = realY)) +
     annotation_custom(grob=curve1,-0.5,-2.1,-0.1,1.5) +
     annotation_custom(grob=curve2,-2.1,-0.5,7.5,9) +
     annotation_custom(grob=curve3,2,3.1,9,7.9) +
-    annotation_custom(grob=curve4,3.5,2.5,0.9,-0.1)
+    annotation_custom(grob=curve4,3.5,2.5,0.9,-0.1) + ggtitle("ALL 4 sessions together, normal trilateration")
 
+# Plot of the real and predicted space distribution, as well as the class walls
+gsm <- ggplot(pred1limsmooth, aes(x = predXsmooth, y = predYsmooth, shape="c")) + 
+    geom_point(alpha=0.05,col="red",size=10) + 
+    geom_point(data=beacons, mapping=aes(x=beaconX, y=beaconY), alpha=1, col="grey", size=3) + theme_bw() +
+    geom_polygon(data = datapoly1, aes(x=x, y=y), colour="black", fill=NA) +
+    geom_polygon(data = datapoly2, aes(x=x, y=y), colour="black", fill=NA) +
+    geom_polygon(data = datapoly3, aes(x=x, y=y), colour="black", fill=NA) +
+    geom_polygon(data = datapoly4, aes(x=x, y=y), colour="black", fill=NA) +
+    geom_polygon(data = datapoly5, aes(x=x, y=y), colour="black", fill=NA) +
+    geom_segment(aes(x = -0.5, y = -0.1, xend = 2.5, yend = -0.1)) + 
+    geom_segment(aes(x = -2.1, y = 1.5, xend = -2.1, yend = 7.5)) +
+    geom_segment(aes(x = 3.1, y = 7.9, xend = 3.1, yend = 3.5)) +
+    geom_segment(aes(x = -0.5, y = 9, xend = 2, yend = 9)) +
+    geom_segment(aes(x = 3.1, y = 3.5, xend = 3.5, yend = 3.5)) +
+    geom_segment(aes(x = 3.5, y = 3.5, xend = 3.5, yend = 0.9)) +
+    annotation_custom(grob=curve1,-0.5,-2.1,-0.1,1.5) +
+    annotation_custom(grob=curve2,-2.1,-0.5,7.5,9) +
+    annotation_custom(grob=curve3,2,3.1,9,7.9) +
+    annotation_custom(grob=curve4,3.5,2.5,0.9,-0.1) + ggtitle("ALL 4 sessions together, smoothed trilateration")
+
+sessions <- c("luisSession1", "luisSession2", "luisSession3", "luisSession4")
+
+gs3 <- NA
+gs4 <- NA
+
+gs3sm <- NA
+gs4sm <- NA
+
+for(session in sessions){
+    
+    predlim <- pred1lim[pred1lim$session == session,]
+    predlimsmooth <- pred1limsmooth[pred1limsmooth$session == session,]
+
+    # Plot of the real and predicted space distribution, as well as the class walls
+    gs <- ggplot(predlim, aes(x = predX, y = predY, shape="b")) + 
+        geom_point(alpha=0.05,col="orange",size=10) + 
+        geom_point(data=beacons, mapping=aes(x=beaconX, y=beaconY), alpha=1, col="grey", size=3) + theme_bw() +
+        geom_polygon(data = datapoly1, aes(x=x, y=y), colour="black", fill=NA) +
+        geom_polygon(data = datapoly2, aes(x=x, y=y), colour="black", fill=NA) +
+        geom_polygon(data = datapoly3, aes(x=x, y=y), colour="black", fill=NA) +
+        geom_polygon(data = datapoly4, aes(x=x, y=y), colour="black", fill=NA) +
+        geom_polygon(data = datapoly5, aes(x=x, y=y), colour="black", fill=NA) +
+        geom_segment(aes(x = -0.5, y = -0.1, xend = 2.5, yend = -0.1)) + 
+        geom_segment(aes(x = -2.1, y = 1.5, xend = -2.1, yend = 7.5)) +
+        geom_segment(aes(x = 3.1, y = 7.9, xend = 3.1, yend = 3.5)) +
+        geom_segment(aes(x = -0.5, y = 9, xend = 2, yend = 9)) +
+        geom_segment(aes(x = 3.1, y = 3.5, xend = 3.5, yend = 3.5)) +
+        geom_segment(aes(x = 3.5, y = 3.5, xend = 3.5, yend = 0.9)) +
+        annotation_custom(grob=curve1,-0.5,-2.1,-0.1,1.5) +
+        annotation_custom(grob=curve2,-2.1,-0.5,7.5,9) +
+        annotation_custom(grob=curve3,2,3.1,9,7.9) +
+        annotation_custom(grob=curve4,3.5,2.5,0.9,-0.1) + ggtitle(paste(session,", normal trilateration"))
+    
+    if(session=="luisSession3") gs3 <- gs
+    if(session=="luisSession4") gs4 <- gs
+    
+    # Plot of the real and predicted space distribution, as well as the class walls
+    gsm <- ggplot(pred1limsmooth, aes(x = predXsmooth, y = predYsmooth, shape="c")) + 
+        geom_point(alpha=0.05,col="red",size=10) + 
+        geom_point(data=beacons, mapping=aes(x=beaconX, y=beaconY), alpha=1, col="grey", size=3) + theme_bw() +
+        geom_polygon(data = datapoly1, aes(x=x, y=y), colour="black", fill=NA) +
+        geom_polygon(data = datapoly2, aes(x=x, y=y), colour="black", fill=NA) +
+        geom_polygon(data = datapoly3, aes(x=x, y=y), colour="black", fill=NA) +
+        geom_polygon(data = datapoly4, aes(x=x, y=y), colour="black", fill=NA) +
+        geom_polygon(data = datapoly5, aes(x=x, y=y), colour="black", fill=NA) +
+        geom_segment(aes(x = -0.5, y = -0.1, xend = 2.5, yend = -0.1)) + 
+        geom_segment(aes(x = -2.1, y = 1.5, xend = -2.1, yend = 7.5)) +
+        geom_segment(aes(x = 3.1, y = 7.9, xend = 3.1, yend = 3.5)) +
+        geom_segment(aes(x = -0.5, y = 9, xend = 2, yend = 9)) +
+        geom_segment(aes(x = 3.1, y = 3.5, xend = 3.5, yend = 3.5)) +
+        geom_segment(aes(x = 3.5, y = 3.5, xend = 3.5, yend = 0.9)) +
+        annotation_custom(grob=curve1,-0.5,-2.1,-0.1,1.5) +
+        annotation_custom(grob=curve2,-2.1,-0.5,7.5,9) +
+        annotation_custom(grob=curve3,2,3.1,9,7.9) +
+        annotation_custom(grob=curve4,3.5,2.5,0.9,-0.1) + ggtitle(paste(session,", smoothed trilateration"))
+
+    if(session=="luisSession3") gs3sm <- gsm
+    if(session=="luisSession4") gs4sm <- gsm
+    
+}
+
+#multiplot(g, gs3, gs4, cols=3)
+
+#multiplot(gsm, gs3sm, gs4sm, cols=3)
 ```
 
 
+```{r, eval=T, echo=F, message=FALSE, warning=FALSE, fig.width = 15, fig.height = 6, fig.cap = "Estimated positions during Journee des Classes 2015, considering only the moments in which location was stable for more than 1 sec.", fig.fullwidth = TRUE}
+
+# Select only stationary kind of measures? (within 1m of each other?)
+findStaticSamples <- function(data, threshold=1){
+    isStatic <- logical()
+    isStatic[1] <- FALSE
+    for(i in 2:nrow(data)){
+        isStatic[i] <- (sqrt((data[i,"predX"]-data[i-1,"predX"])^2+(data[i,"predY"]-data[i-1,"predY"])^2))<=threshold
+    }
+    isStatic    
+}
+
+pred1$static <- findStaticSamples(pred1, 0.8) # We find which samples move less than 0.5m from the previous one
+pred1static <- pred1[pred1$static==TRUE,]
+pred1static <- pred1static[pred1static$predX>=-2 & pred1static$predX<=3.5 & pred1static$predY>=0 & pred1static$predY<=8.9,]
+g <- ggplot(pred1static, aes(x = predX, y = predY, shape="b")) + 
+    geom_point(alpha=0.04,col="orange",size=10) + 
+    geom_point(data=beacons, mapping=aes(x=beaconX, y=beaconY), alpha=1, col="grey", size=3) + theme_bw() +
+    geom_polygon(data = datapoly1, aes(x=x, y=y), colour="black", fill=NA) +
+    geom_polygon(data = datapoly2, aes(x=x, y=y), colour="black", fill=NA) +
+    geom_polygon(data = datapoly3, aes(x=x, y=y), colour="black", fill=NA) +
+    geom_polygon(data = datapoly4, aes(x=x, y=y), colour="black", fill=NA) +
+    geom_polygon(data = datapoly5, aes(x=x, y=y), colour="black", fill=NA) +
+    geom_segment(aes(x = -0.5, y = -0.1, xend = 2.5, yend = -0.1)) + 
+    geom_segment(aes(x = -2.1, y = 1.5, xend = -2.1, yend = 7.5)) +
+    geom_segment(aes(x = 3.1, y = 7.9, xend = 3.1, yend = 3.5)) +
+    geom_segment(aes(x = -0.5, y = 9, xend = 2, yend = 9)) +
+    geom_segment(aes(x = 3.1, y = 3.5, xend = 3.5, yend = 3.5)) +
+    geom_segment(aes(x = 3.5, y = 3.5, xend = 3.5, yend = 0.9)) +
+    annotation_custom(grob=curve1,-0.5,-2.1,-0.1,1.5) +
+    annotation_custom(grob=curve2,-2.1,-0.5,7.5,9) +
+    annotation_custom(grob=curve3,2,3.1,9,7.9) +
+    annotation_custom(grob=curve4,3.5,2.5,0.9,-0.1) + ggtitle("ALL 4 sessions together, normal trilateration, STATIC samples")
+
+gs3 <- NA
+gs4 <- NA
+
+gs3sm <- NA
+gs4sm <- NA
+
+for(session in sessions){
+    
+    predlim <- pred1static[pred1static$session == session,]
+
+    # Plot of the real and predicted space distribution, as well as the class walls
+    gs <- ggplot(predlim, aes(x = predX, y = predY, shape="b")) + 
+        geom_point(alpha=0.08,col="orange",size=10) + 
+        geom_point(data=beacons, mapping=aes(x=beaconX, y=beaconY), alpha=1, col="grey", size=3) + theme_bw() +
+        geom_polygon(data = datapoly1, aes(x=x, y=y), colour="black", fill=NA) +
+        geom_polygon(data = datapoly2, aes(x=x, y=y), colour="black", fill=NA) +
+        geom_polygon(data = datapoly3, aes(x=x, y=y), colour="black", fill=NA) +
+        geom_polygon(data = datapoly4, aes(x=x, y=y), colour="black", fill=NA) +
+        geom_polygon(data = datapoly5, aes(x=x, y=y), colour="black", fill=NA) +
+        geom_segment(aes(x = -0.5, y = -0.1, xend = 2.5, yend = -0.1)) + 
+        geom_segment(aes(x = -2.1, y = 1.5, xend = -2.1, yend = 7.5)) +
+        geom_segment(aes(x = 3.1, y = 7.9, xend = 3.1, yend = 3.5)) +
+        geom_segment(aes(x = -0.5, y = 9, xend = 2, yend = 9)) +
+        geom_segment(aes(x = 3.1, y = 3.5, xend = 3.5, yend = 3.5)) +
+        geom_segment(aes(x = 3.5, y = 3.5, xend = 3.5, yend = 0.9)) +
+        annotation_custom(grob=curve1,-0.5,-2.1,-0.1,1.5) +
+        annotation_custom(grob=curve2,-2.1,-0.5,7.5,9) +
+        annotation_custom(grob=curve3,2,3.1,9,7.9) +
+        annotation_custom(grob=curve4,3.5,2.5,0.9,-0.1) + ggtitle(paste(session,", normal trilateration, STATIC samples"))
+    
+    if(session=="luisSession3") gs3 <- gs
+    if(session=="luisSession4") gs4 <- gs
+    
+}
+
+multiplot(g, gs3, gs4, cols=3)
+
+
+```
+* We are still working on the more accurate estimation of position from the eyetracking video feed of these sessions, which will provide us with a more concrete idea of the accuracy to be expected from the BLE beacons in realistic conditions
+
 # Discussion: What Are Our Alternatives?
 
-* Use one of the options provided in the survey
-* Use 2m-accuracy beacons (might be good for longer periods of time)
-* Change our strategy to something using proximity (a symbolic map of the class?), similar to Slotta & Moher's "embedded phenomena" [^moher2015]
+* With this survey and first results in mind, what is our best alternative for an indoor location technology for the classroom? It actually depends on what we want to get out of it:
+    a. If rough visualizations such as the ones provided above are enough (knowing that they might be off about 1.5m), given that we expect the error to be unbiased and cancelled out over time, then our current Estimote beacons provide a relatively inexpensive and unobstrusive technology
+    b. If we are going to use the indoor location in conjunction with eye-trackers all the time, then a combination of chilitag-based (or even without chilitags, if we manage to do a feature-based computer vision detector) could be a good option, in which we have quite accurate location for the moments in which the teacher has the walls on the field of view, with fall-back to the beacons when the teacher is looking down (normally, static)
+    c. If we need the increased accuracy to dm-level, and we are ready to shell out 2,000-12,000 euros, we can invest in one of the more advanced technology options mentioned at the end of the survey. These options also have the mild problem of being a bit more difficult to setup in the classroom, and the infrastructure might not be so "invisible", compared to the eyetracker or the BLE beacons.
+    d. Depending on what we want to see, we could also change our current location-based strategy to a "proximity-based" one, in which we track when the teacher is very close to certain interesting point, in which we put a beacon (similar to Slotta & Moher's "embedded phenomena" [^moher2015]). This would lead to a more "symbolic map" of the classroom (e.g., how much time the teacher spent at her desk, how much at the whiteboard, what was the path of the teacher from one interesting point to another -- i.e., from beacon to beacon).
 
 
 
