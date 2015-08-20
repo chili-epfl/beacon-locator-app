@@ -14,7 +14,7 @@ output: rmarkdown::tufte_handout
 * A variety of technologies have been used to implement these systems, with varying degrees of success and accuracy: radio-frequency, infra-red (IR), acoustic signals, inertial measurements and even Earth's magnetic field
 * Our plan is to perform experiments with school teachers, where we provide them with a map of their movements in the classroom, so that they can reflect on the patterns that they observe
 * Thus, we need an IPS solution that can track the teacher with enough accuracy to provide meaningful patterns/insights (e.g., <1m error)
-* This document summarizes a) a survey of the IPS field (both research and commercial solutions) to find an accurate-enouogh solution we can use in a classroom, as well as b) the results of our first experiments with BLE beacons in our lab's meeting room
+* This document summarizes a) a survey of the IPS field (both research and commercial solutions) to find an accurate-enough solution we can use in a classroom, as well as b) the results of our first experiments with BLE beacons in our lab's meeting room
 
 # Survey on Indoor Location Methods
 
@@ -409,15 +409,18 @@ multiplot(g, gs3, gs4, cols=3)
 # Discussion: What Are Our Alternatives?
 
 * With this survey and first results in mind, what is our best alternative for an indoor location technology for the classroom? It actually depends on what we want to get out of it:
-    a. If rough visualizations such as the ones provided above are enough (knowing that they might be off about 1.5m), given that we expect the error to be unbiased and cancelled out over time, then our current Estimote beacons provide a relatively inexpensive and unobstrusive technology
-    b. If we are going to use the indoor location in conjunction with eye-trackers all the time, then a combination of chilitag-based (or even without chilitags, if we manage to do a feature-based computer vision detector) could be a good option, in which we have quite accurate location for the moments in which the teacher has the walls on the field of view, with fall-back to the beacons when the teacher is looking down (normally, static)
+    a. If rough visualizations such as the ones provided above are enough (knowing that they might be off about 1.5m), then our current Estimote beacons provide a relatively inexpensive and unobstrusive technological option
+    b. If we are going to use the indoor location in conjunction with eye-trackers all the time, then a combination of chilitag-based (or even without chilitags, if we manage to do a feature-based computer vision detector) could be a good option, in which we have quite accurate location for the moments in which the teacher has the walls on the field of view, with fall-back to the beacons when the teacher is looking down (often, static moments)
     c. If we need the increased accuracy to dm-level, and we are ready to shell out 2,000-12,000 euros, we can invest in one of the more advanced technology options mentioned at the end of the survey. These options also have the mild problem of being a bit more difficult to setup in the classroom, and the infrastructure might not be so "invisible", compared to the eyetracker or the BLE beacons.
-    d. Depending on what we want to see, we could also change our current location-based strategy to a "proximity-based" one, in which we track when the teacher is very close to certain interesting point, in which we put a beacon (similar to Slotta & Moher's "embedded phenomena" [^moher2015]). This would lead to a more "symbolic map" of the classroom (e.g., how much time the teacher spent at her desk, how much at the whiteboard, what was the path of the teacher from one interesting point to another -- i.e., from beacon to beacon).
+    d. Depending on what we want to see, we could also change our current location-based strategy to a "proximity-based" one, in which we track when the teacher is very close to certain interesting point, in which we put a beacon (similar to Slotta & Moher's "embedded phenomena" learning activities [^moher2015]). This would lead to a more "symbolic map" of the classroom (e.g., how much time the teacher spent at her desk, how much at the whiteboard, what was the path of the teacher from one interesting point to another -- i.e., from beacon to beacon).
 
+# Open Questions and Next Steps
 
+* Should we buy any of the more advanced technologies, or develop further what we have (e.g., try the computer vision option)?
+* Should we get back to Stephanie Fleck again with this report about the usage of the beacons? (What was her idea of collaborating with us again?)
+* Are these visualizations of the teacher map OK? What else would be interesting?
+* Depending on the previous responses, establish a calendar of contacts with schools to do the location tracking (and/or eyetracking)
 
-
-[^tufte_latex]: https://code.google.com/p/tufte-latex/
 
 [^liu2007]: Liu, H., Darabi, H., Banerjee, P., & Liu, J. (2007). Survey of wireless indoor positioning techniques and systems. *Systems, Man, and Cybernetics, Part C: Applications and Reviews, IEEE Transactions on, 37*(6), 1067-1080.
 
