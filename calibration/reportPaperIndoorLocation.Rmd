@@ -35,6 +35,7 @@ output: rmarkdown::tufte_handout
 <!--* For example, there are RF systems[^duckworth2007] that put (quite conspicuous) antennas outside the building, and achieve 0.7m accuracy-->
 * One of the most prominent recent contenders are Bluetooth-based (especially, BLE and the iBeacon technology promoted by Apple), although experts say that it is more aimed at indoor *proximity* (activate something when very close to a beacon), not indoor *location* (determining distance to one or more beacons)
 * However, this sector is moving fast, there are a number of startups working at this problem that might have interesting results soon [^startups]
+    * One interesting contender seems to be this UWB solution, available for around 500 euro [^pozyx]... but it will not be available at least till December 2015!
 
 ## The Bottom Line: Most Likely Options
 * A quite complete and recent review/thesis [^mautz2012] has found and categorized systems belonging to 13 different technologies, and concludes that <1m accuracy is really hard to find, with reasonable cost/infrastructure
@@ -455,3 +456,5 @@ multiplot(g, gs3, gs4, cols=3)
 [^moher2015]: Moher, T., Slotta, J., Acosta, A., Cober, R., Dasgupta, C., Fong, C., ... & Peppler, K. Knowledge Construction in the Instrumented Classroom: Supporting Student Investigations of Their Physical Learning Environment. *Proceedings of the CSCL 2015 Conference*.
 
 [^willow]: http://www.willow.co.uk/html/mcs410-_mcs_cricket_series.php
+
+[^pozyx]: https://www.pozyx.io/store
